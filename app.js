@@ -342,14 +342,17 @@ async function speakText(text, emotion) {
         console.log('Voice Reference ID:', voiceReferenceId);
         console.log('Speed (from emotion):', voiceParams.speed);
 
+        // Prepare emotional text with context prefix
+        const emotionalText = (voiceParams.prefix || '') + text;
+
         // Prepare request payload
         const requestBody = {
-            text: text,
+            text: emotionalText,  // Text with emotional context
             reference_id: voiceReferenceId, // Male or Female voice
             format: 'mp3',
             mp3_bitrate: 128,
             normalize: true,
-            speed: voiceParams.speed || 1.0 // Emotion-based speed modulation
+            speed: voiceParams.speed || 1.0 // Emotion-based speed modulation (0.7x - 1.5x)
         };
 
         console.log('Request Body:', JSON.stringify(requestBody, null, 2));
@@ -471,23 +474,23 @@ function speakWithWebSpeech(text, emotion) {
         console.log('No specific voice found, using default');
     }
 
-    // Adjust speech rate and pitch based on emotion
+    // Adjust speech rate and pitch based on emotion (enhanced ranges)
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
     if (emotion === 'happy') {
-        utterance.rate = 1.1;
-        utterance.pitch = 1.2;
+        utterance.rate = 1.3;   // Much faster for happiness
+        utterance.pitch = 1.4;  // Higher pitch for cheerfulness
     } else if (emotion === 'sad') {
-        utterance.rate = 0.9;
-        utterance.pitch = 0.8;
+        utterance.rate = 0.7;   // Much slower for sadness
+        utterance.pitch = 0.7;  // Lower pitch for melancholy
     } else if (emotion === 'angry') {
-        utterance.rate = 1.2;
-        utterance.pitch = 1.1;
+        utterance.rate = 1.2;   // Faster for intensity
+        utterance.pitch = 0.8;  // Lower pitch for anger
     } else if (emotion === 'surprised') {
-        utterance.rate = 1.15;
-        utterance.pitch = 1.3;
+        utterance.rate = 1.5;   // Very fast for surprise
+        utterance.pitch = 1.5;  // Very high pitch for excitement
     }
 
     console.log('Speech parameters:', {

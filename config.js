@@ -12,29 +12,24 @@ const CONFIG = {
     // Emotion to voice parameter mapping
     EMOTION_VOICE_PARAMS: {
         happy: {
-            speed: 1.1,
-            pitch: 1.1,
-            energy: 1.2
+            speed: 1.3,        // Much faster for excitement
+            prefix: '[Cheerful and upbeat] '
         },
         sad: {
-            speed: 0.9,
-            pitch: 0.9,
-            energy: 0.7
+            speed: 0.7,        // Much slower for sadness
+            prefix: '[Sad and melancholic] '
         },
         neutral: {
-            speed: 1.0,
-            pitch: 1.0,
-            energy: 1.0
+            speed: 1.0,        // Normal pace
+            prefix: ''         // No emotional context
         },
         surprised: {
-            speed: 1.15,
-            pitch: 1.2,
-            energy: 1.3
+            speed: 1.5,        // Very fast for surprise
+            prefix: '[Surprised and excited] '
         },
         angry: {
-            speed: 1.05,
-            pitch: 0.95,
-            energy: 1.3
+            speed: 1.2,        // Faster with intensity
+            prefix: '[Angry and intense] '
         }
     }
 };
