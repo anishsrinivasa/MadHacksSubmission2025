@@ -2,12 +2,16 @@
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('canvas');
 const canvasCtx = canvas.getContext('2d');
-const cursor = document.getElementById('cursor');
+const keyboardCursor = document.getElementById('keyboardCursor');
+const keyboardWrapper = document.querySelector('.keyboard-wrapper');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const status = document.getElementById('status');
 const coordX = document.getElementById('coordX');
 const coordY = document.getElementById('coordY');
+const textOutput = document.getElementById('textOutput');
+const keyboard = document.getElementById('keyboard');
+const keys = document.querySelectorAll('.key');
 
 // State
 let camera = null;
@@ -18,6 +22,13 @@ let isTracking = false;
 let smoothedX = 0;
 let smoothedY = 0;
 const smoothingFactor = 0.3; // Lower = smoother but more lag
+
+// Keyboard state
+let currentText = '';
+let hoveredKey = null;
+let dwellStartTime = null;
+const dwellTime = 500; // 0.5 seconds in milliseconds
+let dwellTimeout = null;
 
 // MediaPipe Face Mesh configuration
 function initFaceMesh() {
@@ -69,35 +80,124 @@ function onResults(results) {
 
         // Draw nose point on canvas
         canvasCtx.beginPath();
-        canvasCtx.arc(smoothedX, smoothedY, 8, 0, 2 * Math.PI);
+        canvasCtx.arc(smoothedX, smoothedY, 10, 0, 2 * Math.PI);
         canvasCtx.fillStyle = '#FF0000';
         canvasCtx.fill();
         canvasCtx.strokeStyle = '#FFFFFF';
-        canvasCtx.lineWidth = 2;
+        canvasCtx.lineWidth = 3;
         canvasCtx.stroke();
 
-        // Update cursor position (mirrored to match video)
-        const containerRect = canvas.getBoundingClientRect();
-        const cursorX = containerRect.left + (canvas.width - smoothedX) * (containerRect.width / canvas.width);
-        const cursorY = containerRect.top + smoothedY * (containerRect.height / canvas.height);
+        // Map nose position to keyboard cursor
+        // Use normalized coordinates (0-1) from noseTip
+        const keyboardRect = keyboardWrapper.getBoundingClientRect();
 
-        cursor.style.left = `${cursorX}px`;
-        cursor.style.top = `${cursorY}px`;
-        cursor.classList.add('active');
+        // Map nose position (invert X for natural movement)
+        const normalizedX = 1 - noseTip.x; // Invert X for natural left-right
+        const normalizedY = noseTip.y;
+
+        // Calculate cursor position within keyboard bounds
+        const cursorX = normalizedX * keyboardRect.width;
+        const cursorY = normalizedY * keyboardRect.height;
+
+        // Update keyboard cursor position (relative to keyboard wrapper)
+        keyboardCursor.style.left = `${cursorX}px`;
+        keyboardCursor.style.top = `${cursorY}px`;
+        keyboardCursor.classList.add('active');
 
         // Update coordinates display
-        coordX.textContent = Math.round(smoothedX);
-        coordY.textContent = Math.round(smoothedY);
+        coordX.textContent = Math.round(normalizedX * 100);
+        coordY.textContent = Math.round(normalizedY * 100);
 
         status.textContent = 'Tracking active - Move your nose!';
         status.style.color = '#10b981';
     } else {
-        cursor.classList.remove('active');
+        keyboardCursor.classList.remove('active');
         status.textContent = 'No face detected';
         status.style.color = '#ef4444';
     }
 
     canvasCtx.restore();
+
+    // Check keyboard interaction
+    if (isTracking) {
+        checkKeyboardHover();
+    }
+}
+
+// Check if keyboard cursor is hovering over a key
+function checkKeyboardHover() {
+    const cursorRect = keyboardCursor.getBoundingClientRect();
+    const cursorCenterX = cursorRect.left + cursorRect.width / 2;
+    const cursorCenterY = cursorRect.top + cursorRect.height / 2;
+
+    let foundKey = null;
+
+    keys.forEach(key => {
+        const keyRect = key.getBoundingClientRect();
+
+        // Check if cursor center is within key bounds
+        if (cursorCenterX >= keyRect.left &&
+            cursorCenterX <= keyRect.right &&
+            cursorCenterY >= keyRect.top &&
+            cursorCenterY <= keyRect.bottom) {
+            foundKey = key;
+        }
+    });
+
+    // Handle key hover state
+    if (foundKey !== hoveredKey) {
+        // Clear previous hover
+        if (hoveredKey) {
+            hoveredKey.classList.remove('hovering');
+            clearTimeout(dwellTimeout);
+            dwellTimeout = null;
+        }
+
+        // Set new hover
+        hoveredKey = foundKey;
+
+        if (hoveredKey) {
+            hoveredKey.classList.add('hovering');
+            dwellStartTime = Date.now();
+
+            // Start dwell timer
+            dwellTimeout = setTimeout(() => {
+                selectKey(hoveredKey);
+            }, dwellTime);
+        }
+    }
+}
+
+// Handle key selection
+function selectKey(key) {
+    const keyValue = key.getAttribute('data-key');
+
+    // Add selection visual feedback
+    key.classList.add('selecting');
+    setTimeout(() => {
+        key.classList.remove('selecting', 'hovering');
+    }, 200);
+
+    // Handle different key types
+    if (keyValue === 'BACKSPACE') {
+        currentText = currentText.slice(0, -1);
+    } else if (keyValue === 'CLEAR') {
+        currentText = '';
+    } else if (keyValue === 'ENTER') {
+        // TODO: This will trigger text-to-speech in Phase 3
+        console.log('SPEAK:', currentText);
+        alert('Phase 3 coming soon: Text-to-speech with emotion!\n\nText: ' + currentText);
+    } else {
+        currentText += keyValue;
+    }
+
+    // Update text display
+    textOutput.textContent = currentText;
+
+    // Clear hover state
+    hoveredKey = null;
+    clearTimeout(dwellTimeout);
+    dwellTimeout = null;
 }
 
 // Start camera and tracking
