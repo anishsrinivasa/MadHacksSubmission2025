@@ -190,6 +190,43 @@ button:disabled {
     font-weight: 600;
 }
 
+/* Emotion Indicator */
+.emotion-indicator {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 15px;
+    color: white;
+}
+
+.emotion-indicator h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.emotion-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.emotion-icon {
+    font-size: 2rem;
+}
+
+.emotion-label {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.emotion-confidence {
+    display: none;
+}
+
 /* Text Display */
 .text-display {
     background: #f9fafb;

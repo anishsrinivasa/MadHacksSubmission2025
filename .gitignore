@@ -1,0 +1,6 @@
+# Claude Code internal directory
+.claude/
+
+# Configuration with API keys (should be environment variables in production)
+# Uncommenting this would exclude config.js from git
+# config.js

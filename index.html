@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>Nose Tracking System</h1>
-            <p>Phase 2: Virtual Keyboard with Dwell Selection</p>
+            <p>Phase 3: Emotion Detection & Text-to-Speech</p>
         </header>
 
         <div class="main-grid">
@@ -93,6 +93,20 @@
                         <span>Y: <span id="coordY">0</span></span>
                     </div>
                 </div>
+
+                <div class="emotion-indicator">
+                    <h4>Detected Emotion</h4>
+                    <div class="emotion-display">
+                        <span class="emotion-icon" id="emotionIcon">😐</span>
+                        <span class="emotion-label" id="emotionLabel">Neutral</span>
+                    </div>
+                    <div class="emotion-confidence">
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceFill"></div>
+                        </div>
+                        <span class="confidence-text" id="confidenceText">0%</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -103,6 +117,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
+    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
