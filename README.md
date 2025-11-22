@@ -54,17 +54,35 @@ git clone https://github.com/anishsrinivasa/MadHacksSubmission2025.git
 cd MadHacksSubmission2025
 ```
 
-2. Open `index.html` in a web browser, or serve it using a local server:
-
+2. Install Python dependencies (for Fish Audio proxy):
 ```bash
-# Using Python
-python3 -m http.server 8000
-
-# Using Node.js (if you have http-server installed)
-npx http-server -p 8000
+pip install -r requirements.txt
 ```
 
-3. Navigate to `http://localhost:8000` in your browser
+3. Start both servers:
+
+**Option A: Using the startup script (Windows)**
+```bash
+start.bat
+```
+
+**Option B: Manual start (all platforms)**
+
+Terminal 1 - Fish Audio Proxy Server:
+```bash
+python proxy.py
+```
+
+Terminal 2 - HTTP Server:
+```bash
+python -m http.server 8000
+```
+
+4. Navigate to `http://localhost:8000` in your browser
+
+**Why two servers?**
+- **HTTP Server (port 8000)**: Serves the web application
+- **Proxy Server (port 5000)**: Proxies Fish Audio API calls to avoid CORS restrictions
 
 ### Configuration
 
@@ -121,8 +139,11 @@ When you click "SPEAK", the app combines your typed text with your detected emot
 MadHacksSubmission2025/
 ├── index.html          # Main HTML file
 ├── app.js              # Core application logic (nose tracking, emotion detection, TTS)
-├── config.js           # Configuration (API keys, settings)
+├── config.js           # Configuration (API keys, voice settings, emotion parameters)
 ├── style.css           # Styling
+├── proxy.py            # Fish Audio API proxy server (solves CORS)
+├── requirements.txt    # Python dependencies for proxy server
+├── start.bat           # Startup script (Windows) - runs both servers
 └── README.md           # This file
 ```
 
@@ -164,9 +185,12 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 - Wait for models to load (first time may take a moment)
 
 ### TTS not working
+- Ensure both servers are running (HTTP server on port 8000, proxy on port 5000)
 - Check your API key in `config.js`
 - Verify API key is valid and has credits
 - Check browser console for error messages
+- Verify proxy server is running: visit `http://localhost:5000/health`
+- If you see CORS errors, make sure the proxy server is running
 
 ## Why This Matters
 

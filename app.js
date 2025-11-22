@@ -38,6 +38,9 @@ let dwellTimeout = null;
 
 // Emotion state
 let currentEmotion = 'neutral';
+
+// Speak cooldown state (prevents spam)
+let speakCooldown = false;
 let emotionConfidence = 0;
 
 // Emotion icons mapping
@@ -218,8 +221,23 @@ function selectKey(key) {
     } else if (keyValue === 'CLEAR') {
         currentText = '';
     } else if (keyValue === 'ENTER') {
+        // Check cooldown before speaking
+        if (speakCooldown) {
+            console.log('SPEAK button on cooldown, please wait...');
+            status.textContent = 'Please wait (cooldown)...';
+            status.style.color = '#f59e0b';
+            return;
+        }
+
         // Trigger text-to-speech with detected emotion
         speakText(currentText, currentEmotion);
+
+        // Set cooldown for 2 seconds
+        speakCooldown = true;
+        setTimeout(() => {
+            speakCooldown = false;
+            console.log('SPEAK button cooldown expired');
+        }, 2000);
     } else {
         currentText += keyValue;
     }
@@ -313,43 +331,66 @@ async function speakText(text, emotion) {
         // Get voice parameters based on emotion
         const voiceParams = CONFIG.EMOTION_VOICE_PARAMS[emotion] || CONFIG.EMOTION_VOICE_PARAMS.neutral;
 
-        // Get selected voice reference ID
+        // Get selected voice reference ID (male/female)
         const voiceReferenceId = CONFIG.VOICE_REFERENCES[selectedVoice];
 
-        // Call Fish Audio API
-        const response = await fetch(`${CONFIG.FISH_AUDIO_BASE_URL}/tts`, {
+        // Debug logging
+        console.log('=== Fish Audio TTS Request ===');
+        console.log('Text:', text);
+        console.log('Emotion:', emotion);
+        console.log('Selected Voice:', selectedVoice);
+        console.log('Voice Reference ID:', voiceReferenceId);
+        console.log('Speed (from emotion):', voiceParams.speed);
+
+        // Prepare request payload
+        const requestBody = {
+            text: text,
+            reference_id: voiceReferenceId, // Male or Female voice
+            format: 'mp3',
+            mp3_bitrate: 128,
+            normalize: true,
+            speed: voiceParams.speed || 1.0 // Emotion-based speed modulation
+        };
+
+        console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+
+        // Call local proxy server (avoids CORS issues)
+        const response = await fetch('http://localhost:5000/tts', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${CONFIG.FISH_AUDIO_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                text: text,
-                reference_id: voiceReferenceId, // Use selected voice (male/female)
-                format: 'mp3',
-                mp3_bitrate: 128,
-                normalize: true,
-                speed: voiceParams.speed || 1.0
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('API Response Status:', response.status);
+        console.log('API Response Headers:', [...response.headers.entries()]);
+
         if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            const errorText = await response.text();
+            console.error('API Error Response:', errorText);
+            throw new Error(`Fish Audio API error: ${response.status} - ${errorText}`);
         }
 
         // Get audio blob
         const audioBlob = await response.blob();
+        console.log('Audio Blob Size:', audioBlob.size, 'bytes');
+        console.log('Audio Blob Type:', audioBlob.type);
+
         const audioUrl = URL.createObjectURL(audioBlob);
+        console.log('Audio URL Created:', audioUrl);
 
         // Play audio
         const audio = new Audio(audioUrl);
 
         audio.onplay = () => {
-            status.textContent = 'Speaking...';
+            console.log('Audio playback started');
+            status.textContent = `Speaking (${selectedVoice}, ${emotion})...`;
             status.style.color = '#10b981';
         };
 
         audio.onended = () => {
+            console.log('Audio playback complete');
             status.textContent = 'Speech complete!';
             status.style.color = '#10b981';
             URL.revokeObjectURL(audioUrl);
@@ -359,43 +400,82 @@ async function speakText(text, emotion) {
             }, 2000);
         };
 
-        audio.onerror = () => {
+        audio.onerror = (e) => {
+            console.error('Audio playback error:', e);
             throw new Error('Audio playback failed');
         };
 
         await audio.play();
+        console.log('=== Fish Audio TTS Success ===');
 
     } catch (error) {
-        console.error('TTS Error:', error);
-        
-        // Fallback to Web Speech API if Fish Audio fails (CORS or other issues)
-        if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
-            console.log('Fish Audio API failed, falling back to Web Speech API');
-            return speakWithWebSpeech(text, emotion);
-        }
-        
-        status.textContent = 'Speech generation failed';
-        status.style.color = '#ef4444';
-        alert(`Error generating speech: ${error.message}. Using browser's built-in speech instead.`);
+        console.error('=== Fish Audio TTS Error ===');
+        console.error('Error Type:', error.name);
+        console.error('Error Message:', error.message);
+        console.error('Stack Trace:', error.stack);
+
+        // Fallback to Web Speech API if Fish Audio fails
+        status.textContent = 'Fish Audio failed, using fallback...';
+        status.style.color = '#f59e0b';
+
+        console.log('Falling back to Web Speech API');
+        return speakWithWebSpeech(text, emotion);
     }
 }
 
-// Fallback: Web Speech API (works without API key, no CORS issues)
+// Web Speech API with proper male/female voice selection
 function speakWithWebSpeech(text, emotion) {
     if (!('speechSynthesis' in window)) {
         alert('Speech synthesis not supported in this browser');
         return;
     }
 
+    console.log('=== Web Speech API Request ===');
+    console.log('Text:', text);
+    console.log('Emotion:', emotion);
+    console.log('Selected Voice Gender:', selectedVoice);
+
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
+    // Get available voices
+    const voices = window.speechSynthesis.getVoices();
+    console.log('Available voices:', voices.length);
+
     const utterance = new SpeechSynthesisUtterance(text);
-    
+
+    // Select voice based on gender
+    let selectedVoiceObj = null;
+
+    if (selectedVoice === 'female') {
+        // Try to find female voices (in order of preference)
+        selectedVoiceObj = voices.find(v => v.name.includes('Female')) ||
+                          voices.find(v => v.name.includes('Zira')) ||
+                          voices.find(v => v.name.includes('Samantha')) ||
+                          voices.find(v => v.name.includes('Victoria')) ||
+                          voices.find(v => v.name === 'Google US English') ||
+                          voices.find(v => !v.name.includes('Male'));
+    } else {
+        // Try to find male voices (in order of preference)
+        selectedVoiceObj = voices.find(v => v.name.includes('Male')) ||
+                          voices.find(v => v.name.includes('David')) ||
+                          voices.find(v => v.name.includes('Mark')) ||
+                          voices.find(v => v.name.includes('Daniel')) ||
+                          voices.find(v => v.name === 'Google UK English Male');
+    }
+
+    if (selectedVoiceObj) {
+        utterance.voice = selectedVoiceObj;
+        console.log('Selected voice:', selectedVoiceObj.name, '(' + selectedVoiceObj.lang + ')');
+    } else {
+        console.log('No specific voice found, using default');
+    }
+
     // Adjust speech rate and pitch based on emotion
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
-    
+    utterance.volume = 1.0;
+
     if (emotion === 'happy') {
         utterance.rate = 1.1;
         utterance.pitch = 1.2;
@@ -410,12 +490,20 @@ function speakWithWebSpeech(text, emotion) {
         utterance.pitch = 1.3;
     }
 
+    console.log('Speech parameters:', {
+        rate: utterance.rate,
+        pitch: utterance.pitch,
+        volume: utterance.volume
+    });
+
     utterance.onstart = () => {
-        status.textContent = 'Speaking...';
+        console.log('Web Speech playback started');
+        status.textContent = `Speaking (${selectedVoice}, ${emotion})...`;
         status.style.color = '#10b981';
     };
 
     utterance.onend = () => {
+        console.log('Web Speech playback complete');
         status.textContent = 'Speech complete!';
         status.style.color = '#10b981';
         setTimeout(() => {
@@ -430,6 +518,7 @@ function speakWithWebSpeech(text, emotion) {
     };
 
     window.speechSynthesis.speak(utterance);
+    console.log('=== Web Speech API Success ===');
 }
 
 // Start camera and tracking

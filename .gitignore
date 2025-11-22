@@ -1,6 +1,18 @@
 # Claude Code internal directory
 .claude/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
 # Configuration with API keys (should be environment variables in production)
 # Uncommenting this would exclude config.js from git
 # config.js
