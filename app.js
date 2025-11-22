@@ -25,14 +25,22 @@ let isTracking = false;
 // Smoothing variables
 let smoothedX = 0;
 let smoothedY = 0;
-const smoothingFactor = 0.3; // Lower = smoother but more lag
+const smoothingFactor = 0.15; // Lower = smoother but more lag (reduced for less jitter)
 
 // Keyboard state
 let currentText = '';
 let hoveredKey = null;
 let dwellStartTime = null;
-const dwellTime = 500; // 0.5 seconds in milliseconds
+const dwellTime = 650; // Slightly longer for more reliability (in milliseconds)
 let dwellTimeout = null;
+
+// Cursor stability tracking for point-and-click behavior
+let lastCursorX = 0;
+let lastCursorY = 0;
+let lastCursorTime = 0;
+const stabilityThreshold = 15; // pixels - cursor must move less than this to be considered stable (increased for more forgiveness)
+const stabilityCheckTime = 50; // milliseconds - check stability over this time window (reduced for faster response)
+let stabilityGracePeriod = 0; // Track when we first hovered to allow initial timer start
 
 // Emotion state
 let currentEmotion = 'neutral';
@@ -105,17 +113,32 @@ function onResults(results) {
         canvasCtx.stroke();
 
         // Map nose position to keyboard cursor
-        // Use normalized coordinates (0-1) from noseTip
+        // Use SMOOTHED coordinates instead of raw nose position for less jitter
         const keyboardRect = keyboardWrapper.getBoundingClientRect();
 
-        // Map nose position (invert X for natural movement)
-        let normalizedX = 1 - noseTip.x; // Invert X for natural left-right
-        let normalizedY = noseTip.y;
+        // Convert smoothed pixel coordinates back to normalized (0-1)
+        const smoothedNormalizedX = smoothedX / canvas.width;
+        const smoothedNormalizedY = smoothedY / canvas.height;
 
-        // Apply sensitivity multiplier for easier movement
-        const sensitivity = 1.4;
-        normalizedX = (normalizedX - 0.5) * sensitivity + 0.5;
-        normalizedY = (normalizedY - 0.5) * sensitivity + 0.5;
+        // Map nose position (invert X for natural movement)
+        let normalizedX = 1 - smoothedNormalizedX; // Invert X for natural left-right
+        let normalizedY = smoothedNormalizedY;
+
+        // Sensitivity multipliers for cursor movement
+        const sensitivityX = 6.0; // Slightly higher for left/right
+        const sensitivityY = 9.0; // WAY WAY higher for up/down
+        
+        // Offset adjustments to center the neutral face position
+        const offsetX = 0.0; // X offset (usually 0)
+        const offsetY = -0.12; // Y offset (negative = move center point up, so you don't need to look as far up)
+        
+        // Apply offset first (adjusts the center point)
+        normalizedX = normalizedX + offsetX;
+        normalizedY = normalizedY + offsetY;
+        
+        // Apply sensitivity multipliers
+        normalizedX = (normalizedX - 0.5) * sensitivityX + 0.5;
+        normalizedY = (normalizedY - 0.5) * sensitivityY + 0.5;
 
         // Clamp values to stay within bounds [0, 1]
         normalizedX = Math.max(0, Math.min(1, normalizedX));
@@ -160,6 +183,30 @@ function checkKeyboardHover() {
     const cursorCenterX = cursorRect.left + cursorRect.width / 2;
     const cursorCenterY = cursorRect.top + cursorRect.height / 2;
 
+    // Calculate cursor movement speed
+    const now = Date.now();
+    const timeDelta = now - lastCursorTime;
+    let isStable = false;
+
+    if (lastCursorTime > 0 && timeDelta > 0) {
+        const distance = Math.sqrt(
+            Math.pow(cursorCenterX - lastCursorX, 2) + 
+            Math.pow(cursorCenterY - lastCursorY, 2)
+        );
+        
+        // Consider stable if movement is below threshold
+        // More forgiving: just check if movement is small, don't require full time window
+        isStable = distance < stabilityThreshold;
+    } else if (lastCursorTime === 0) {
+        // First frame - initialize but don't consider stable yet
+        isStable = false;
+    }
+
+    // Update last position and time
+    lastCursorX = cursorCenterX;
+    lastCursorY = cursorCenterY;
+    lastCursorTime = now;
+
     let foundKey = null;
 
     keys.forEach(key => {
@@ -181,6 +228,8 @@ function checkKeyboardHover() {
             hoveredKey.classList.remove('hovering');
             clearTimeout(dwellTimeout);
             dwellTimeout = null;
+            dwellStartTime = null;
+            stabilityGracePeriod = 0;
         }
 
         // Set new hover
@@ -188,12 +237,32 @@ function checkKeyboardHover() {
 
         if (hoveredKey) {
             hoveredKey.classList.add('hovering');
-            dwellStartTime = Date.now();
-
-            // Start dwell timer
-            dwellTimeout = setTimeout(() => {
-                selectKey(hoveredKey);
-            }, dwellTime);
+            // Allow a grace period when first hovering (200ms) to start timer
+            stabilityGracePeriod = Date.now() + 200;
+            dwellStartTime = null;
+            dwellTimeout = null;
+        }
+    } else if (hoveredKey && foundKey === hoveredKey) {
+        // Same key, check if we should start/resume the timer
+        const inGracePeriod = Date.now() < stabilityGracePeriod;
+        
+        if (isStable || inGracePeriod || lastCursorTime === 0) {
+            // Cursor is stable, in grace period, or first frame - start or continue the timer
+            if (!dwellStartTime) {
+                // Start the timer for the first time
+                dwellStartTime = Date.now();
+                dwellTimeout = setTimeout(() => {
+                    selectKey(hoveredKey);
+                }, dwellTime);
+            }
+            // Timer is already running, let it continue
+        } else {
+            // Cursor is moving and grace period expired, cancel the timer
+            if (dwellTimeout) {
+                clearTimeout(dwellTimeout);
+                dwellTimeout = null;
+                dwellStartTime = null;
+            }
         }
     }
 }
@@ -435,6 +504,11 @@ function stopTracking() {
 
     cursor.classList.remove('active');
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Reset cursor tracking
+    lastCursorX = 0;
+    lastCursorY = 0;
+    lastCursorTime = 0;
 
     isTracking = false;
     startBtn.disabled = false;
