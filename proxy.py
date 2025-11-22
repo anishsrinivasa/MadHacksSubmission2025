@@ -26,16 +26,22 @@ def text_to_speech():
         # Get request data from frontend
         data = request.get_json()
 
-        print(f"=== Proxy TTS Request ===")
-        print(f"Text: {data.get('text', '')}")
-        print(f"Reference ID: {data.get('reference_id', '')}")
-        print(f"Speed: {data.get('speed', 1.0)}")
+        print(f"=== Proxy TTS Request ===", flush=True)
+        print(f"Text: {data.get('text', '')}", flush=True)
+        print(f"Reference ID: {data.get('reference_id', '')}", flush=True)
+        print(f"Prosody: {data.get('prosody', {})}", flush=True)
+        print(f"Speed: {data.get('prosody', {}).get('speed', 1.0)}", flush=True)
+        print(f"Volume: {data.get('prosody', {}).get('volume', 0)} dB", flush=True)
+        print(f"Full Request Body: {data}", flush=True)
 
         # Forward request to Fish Audio API
         headers = {
             'Authorization': f'Bearer {FISH_AUDIO_API_KEY}',
             'Content-Type': 'application/json'
         }
+
+        print(f"Sending to Fish Audio: {FISH_AUDIO_BASE_URL}/tts", flush=True)
+        print(f"With data: {data}", flush=True)
 
         response = requests.post(
             f'{FISH_AUDIO_BASE_URL}/tts',
@@ -44,7 +50,8 @@ def text_to_speech():
             timeout=30
         )
 
-        print(f"Fish Audio Response Status: {response.status_code}")
+        print(f"Fish Audio Response Status: {response.status_code}", flush=True)
+        print(f"Fish Audio Response Headers: {dict(response.headers)}", flush=True)
 
         if response.status_code != 200:
             error_text = response.text

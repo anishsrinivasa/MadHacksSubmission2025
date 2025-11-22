@@ -43,6 +43,16 @@ let currentEmotion = 'neutral';
 let speakCooldown = false;
 let emotionConfidence = 0;
 
+// Emotion stabilization (prevent flickering)
+let emotionBuffer = [];
+const EMOTION_BUFFER_SIZE = 10; // Number of frames to consider
+const EMOTION_THRESHOLD = 0.6;  // 60% of frames must agree
+
+// Emotion lock (maintain emotion for 5 seconds after change)
+let emotionLocked = false;
+let emotionLockTimeout = null;
+const EMOTION_LOCK_DURATION = 5000; // 5 seconds
+
 // Emotion icons mapping
 const EMOTION_ICONS = {
     happy: '😊',
@@ -229,6 +239,12 @@ function selectKey(key) {
             return;
         }
 
+        // DEBUG: Log emotion state at button press
+        console.log('=== SPEAK BUTTON PRESSED ===');
+        console.log('currentEmotion value:', currentEmotion);
+        console.log('currentEmotion type:', typeof currentEmotion);
+        console.log('emotionConfidence:', emotionConfidence);
+
         // Trigger text-to-speech with detected emotion
         speakText(currentText, currentEmotion);
 
@@ -286,18 +302,20 @@ function detectEmotion(landmarks) {
         emotion = 'happy';
         confidence = 0.8;
     }
-    // Sad: mouth corners down, eyebrows down
-    else if (mouthWidth < 0.06 && avgEyebrowDist > -0.02) {
-        emotion = 'sad';
-        confidence = 0.7;
-    }
-    // Surprised: mouth open, eyebrows raised
+    // Surprised: mouth open, eyebrows raised (check before sad)
     else if (mouthOpen > 0.05 && avgEyebrowDist < -0.03) {
         emotion = 'surprised';
         confidence = 0.75;
     }
-    // Angry: eyebrows lowered, mouth tense
-    else if (avgEyebrowDist > -0.015 && mouthWidth < 0.07) {
+    // Sad: mouth small/narrow, eyebrows slightly down or neutral
+    // Made more sensitive to detect sadness easier
+    else if (mouthWidth < 0.07 && mouthOpen < 0.02 && avgEyebrowDist > -0.025) {
+        emotion = 'sad';
+        confidence = 0.7;
+    }
+    // Angry: eyebrows furrowed/lowered, mouth tense/compressed
+    // Made more sensitive to detect anger easier
+    else if (avgEyebrowDist > -0.02 && mouthWidth < 0.075 && mouthOpen < 0.025) {
         emotion = 'angry';
         confidence = 0.6;
     }
@@ -305,13 +323,61 @@ function detectEmotion(landmarks) {
     return { emotion, confidence };
 }
 
-// Update emotion UI
+// Update emotion UI with stabilization and 5-second lock
 function updateEmotionUI(emotion, confidence) {
-    currentEmotion = emotion;
+    // If emotion is locked, don't update
+    if (emotionLocked) {
+        return;
+    }
+
+    // Add detected emotion to buffer
+    emotionBuffer.push(emotion);
+
+    // Keep buffer at fixed size
+    if (emotionBuffer.length > EMOTION_BUFFER_SIZE) {
+        emotionBuffer.shift();
+    }
+
+    // Calculate majority emotion from buffer
+    const emotionCounts = {};
+    emotionBuffer.forEach(e => {
+        emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+    });
+
+    // Find emotion with highest count
+    let stabilizedEmotion = currentEmotion;
+    let maxCount = 0;
+    for (const [emo, count] of Object.entries(emotionCounts)) {
+        if (count > maxCount) {
+            maxCount = count;
+            stabilizedEmotion = emo;
+        }
+    }
+
+    // Only change emotion if it exceeds threshold
+    const agreementRatio = maxCount / emotionBuffer.length;
+    if (agreementRatio >= EMOTION_THRESHOLD && stabilizedEmotion !== currentEmotion) {
+        console.log('[EMOTION CHANGED] From:', currentEmotion, 'To:', stabilizedEmotion,
+                    `(${Math.round(agreementRatio * 100)}% agreement over ${emotionBuffer.length} frames)`);
+        currentEmotion = stabilizedEmotion;
+
+        // Lock emotion for 5 seconds
+        emotionLocked = true;
+        if (emotionLockTimeout) {
+            clearTimeout(emotionLockTimeout);
+        }
+        emotionLockTimeout = setTimeout(() => {
+            emotionLocked = false;
+            console.log('[EMOTION UNLOCKED] Can change emotion again');
+        }, EMOTION_LOCK_DURATION);
+        console.log('[EMOTION LOCKED] Locked for 5 seconds');
+    }
+
     emotionConfidence = confidence;
 
-    emotionIcon.textContent = EMOTION_ICONS[emotion];
-    emotionLabel.textContent = emotion.charAt(0).toUpperCase() + emotion.slice(1);
+    // Update UI with stabilized emotion
+    emotionIcon.textContent = EMOTION_ICONS[currentEmotion];
+    emotionLabel.textContent = currentEmotion.charAt(0).toUpperCase() + currentEmotion.slice(1);
     confidenceFill.style.width = `${confidence * 100}%`;
     confidenceText.textContent = `${Math.round(confidence * 100)}%`;
 }
@@ -328,8 +394,18 @@ async function speakText(text, emotion) {
         status.textContent = 'Generating speech...';
         status.style.color = '#3b82f6';
 
+        // DEBUG: Log emotion parameter received
+        console.log('=== speakText() called ===');
+        console.log('emotion parameter:', emotion);
+        console.log('emotion type:', typeof emotion);
+        console.log('CONFIG.EMOTION_VOICE_PARAMS:', CONFIG.EMOTION_VOICE_PARAMS);
+        console.log('CONFIG.EMOTION_VOICE_PARAMS[emotion]:', CONFIG.EMOTION_VOICE_PARAMS[emotion]);
+
         // Get voice parameters based on emotion
         const voiceParams = CONFIG.EMOTION_VOICE_PARAMS[emotion] || CONFIG.EMOTION_VOICE_PARAMS.neutral;
+
+        console.log('voiceParams object:', voiceParams);
+        console.log('voiceParams.speed:', voiceParams.speed);
 
         // Get selected voice reference ID (male/female)
         const voiceReferenceId = CONFIG.VOICE_REFERENCES[selectedVoice];
@@ -341,15 +417,20 @@ async function speakText(text, emotion) {
         console.log('Selected Voice:', selectedVoice);
         console.log('Voice Reference ID:', voiceReferenceId);
         console.log('Speed (from emotion):', voiceParams.speed);
+        console.log('Volume (from emotion):', voiceParams.volume);
 
-        // Prepare request payload (emotion conveyed through speed only)
+        // Prepare request payload with correct Fish Audio API format
+        // Speed and volume must be nested inside 'prosody' object
         const requestBody = {
             text: text,  // Original text without prefixes
             reference_id: voiceReferenceId, // Male or Female voice
             format: 'mp3',
             mp3_bitrate: 128,
             normalize: true,
-            speed: voiceParams.speed || 1.0 // Emotion-based speed modulation (0.7x - 1.5x)
+            prosody: {
+                speed: voiceParams.speed || 1.0,  // Speech speed multiplier (0.5-2.0)
+                volume: voiceParams.volume || 0   // Volume adjustment in dB
+            }
         };
 
         console.log('Request Body:', JSON.stringify(requestBody, null, 2));
