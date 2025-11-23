@@ -26,6 +26,7 @@ type ProfilesPanelProps = {
   onManualDescriptionChange: (value: string) => void;
   onManualSave: () => void;
   onUploadProfile: () => void;
+  recordStatus: string | null;
   uploadStatus: string | null;
   startRecording: () => void;
   stopRecording: () => void;
@@ -61,6 +62,7 @@ export function ProfilesPanel({
   onManualDescriptionChange,
   onManualSave,
   onUploadProfile,
+  recordStatus,
   uploadStatus,
   startRecording,
   stopRecording,
@@ -366,6 +368,23 @@ export function ProfilesPanel({
                     )}
                   </Text>
                 )}
+
+                {/* Status message */}
+                {recordStatus && recordingState === "idle" && (
+                  <Text
+                    align="center"
+                    size="2"
+                    className={
+                      recordStatus.includes("failed") || recordStatus.includes("denied") || recordStatus.includes("Please")
+                        ? "text-red-600"
+                        : recordStatus.includes("created") || recordStatus.includes("success")
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }
+                  >
+                    {recordStatus}
+                  </Text>
+                )}
               </Flex>
             </Card>
                 </div>
@@ -454,6 +473,23 @@ export function ProfilesPanel({
                     Upload & Create Voice
                   </Button>
                 )}
+
+                {/* Status message */}
+                {uploadStatus && !uploadStatus.includes('Creating') && !uploadStatus.includes('Uploading') && (
+                  <Text
+                    align="center"
+                    size="2"
+                    className={
+                      uploadStatus.includes("failed") || uploadStatus.includes("denied") || uploadStatus.includes("Please") || uploadStatus.includes("Choose")
+                        ? "text-red-600"
+                        : uploadStatus.includes("created") || uploadStatus.includes("success")
+                        ? "text-green-600"
+                        : "text-gray-600"
+                    }
+                  >
+                    {uploadStatus}
+                  </Text>
+                )}
               </Flex>
             </Card>
                 </div>
@@ -462,14 +498,6 @@ export function ProfilesPanel({
           </Tabs.Content>
         </div>
       </Tabs.Root>
-
-      {uploadStatus && (
-        <div className="p-3 bg-gray-50 border-t border-gray-200">
-          <Text size="2" color={uploadStatus.includes("failed") || uploadStatus.includes("denied") ? "red" : "gray"}>
-            {uploadStatus}
-          </Text>
-        </div>
-      )}
       </Card>
 
       {deleteTarget && (

@@ -123,6 +123,24 @@ const KEYBOARD_LAYOUT: KeyboardKey[][] = [
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+// Calculate dynamic dwell time based on cursor overlap percentage
+// More overlap = faster dwell time, less overlap = slower dwell time
+const calculateDwellTime = (overlapRatio: number): number => {
+  const MIN_DWELL = DWELL_SELECT_MS; // 750ms - fastest (full overlap)
+  const MAX_DWELL = DWELL_SELECT_MS * 2; // 1500ms - slowest (minimum overlap)
+  const MIN_OVERLAP = 0.35; // Minimum overlap threshold (reduced to support smaller buttons)
+
+  // Normalize overlap ratio to 0-1 range (0.35 → 0, 1.0 → 1)
+  const normalized = (overlapRatio - MIN_OVERLAP) / (1.0 - MIN_OVERLAP);
+  const clamped = clamp(normalized, 0, 1);
+
+  // Invert so more overlap = less time
+  // Use exponential curve for better feel (square for gentler progression)
+  const timeMultiplier = 1 - Math.pow(clamped, 1.5);
+
+  return MIN_DWELL + timeMultiplier * (MAX_DWELL - MIN_DWELL);
+};
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -130,11 +148,17 @@ export default function App() {
   const faceMeshRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smoothingRef = useRef({ x: 0, y: 0 });
+  const positionBufferRef = useRef<{ x: number; y: number }[]>([]); // Multi-frame buffer for averaging
+  const lastValidPositionRef = useRef<{ x: number; y: number } | null>(null); // For outlier detection
+  const lastElementDetectionRef = useRef<number>(0); // Throttle element detection
   const hoveredElementRef = useRef<HTMLElement | null>(null);
   const dwellTimerRef = useRef<number | null>(null);
   const dwellRepeatRef = useRef<number | null>(null);
   const candidateElementRef = useRef<HTMLElement | null>(null); // For hysteresis
   const candidateTimerRef = useRef<number | null>(null);
+  const currentOverlapRatioRef = useRef<number>(1.0); // Track cursor overlap percentage
+  const lastClickTimeRef = useRef<number>(0); // Prevent rapid re-clicks
+  const clickCooldownRef = useRef<number | null>(null); // Cooldown timer after click
   const emotionBufferRef = useRef<Emotion[]>([]);
   const emotionLockRef = useRef<number>(0);
   const emotionBusyRef = useRef(false);
@@ -191,6 +215,7 @@ export default function App() {
     'profiles'
   );
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [recordStatus, setRecordStatus] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [recordingState, setRecordingState] = useState<
     'idle' | 'recording' | 'processing'
@@ -752,10 +777,44 @@ export default function App() {
           const x = noseTip.x * canvas.width;
           const y = noseTip.y * canvas.height;
 
+          // OUTLIER DETECTION: Reject positions that jump too far from last valid position
+          const MAX_JUMP_DISTANCE = 100; // pixels (reduced for smoother tracking)
+          let isOutlier = false;
+          if (lastValidPositionRef.current) {
+            const dx = x - lastValidPositionRef.current.x;
+            const dy = y - lastValidPositionRef.current.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > MAX_JUMP_DISTANCE) {
+              isOutlier = true;
+              console.log(`[NoseTracking] Outlier detected: jump of ${Math.round(distance)}px, rejecting frame`);
+            }
+          }
+
+          // Use last valid position if current is an outlier
+          const validX = isOutlier && lastValidPositionRef.current ? lastValidPositionRef.current.x : x;
+          const validY = isOutlier && lastValidPositionRef.current ? lastValidPositionRef.current.y : y;
+
+          // Update last valid position if not an outlier
+          if (!isOutlier) {
+            lastValidPositionRef.current = { x: validX, y: validY };
+          }
+
+          // MULTI-FRAME BUFFER: Add to circular buffer (keep last 8 frames for smoother tracking)
+          const BUFFER_SIZE = 8;
+          positionBufferRef.current.push({ x: validX, y: validY });
+          if (positionBufferRef.current.length > BUFFER_SIZE) {
+            positionBufferRef.current.shift();
+          }
+
+          // Calculate average position from buffer
+          const avgX = positionBufferRef.current.reduce((sum, pos) => sum + pos.x, 0) / positionBufferRef.current.length;
+          const avgY = positionBufferRef.current.reduce((sum, pos) => sum + pos.y, 0) / positionBufferRef.current.length;
+
+          // EXPONENTIAL MOVING AVERAGE on top of buffer average for extra smoothness
           smoothingRef.current.x =
-            smoothingRef.current.x + (x - smoothingRef.current.x) * SMOOTHING_FACTOR;
+            smoothingRef.current.x + (avgX - smoothingRef.current.x) * SMOOTHING_FACTOR;
           smoothingRef.current.y =
-            smoothingRef.current.y + (y - smoothingRef.current.y) * SMOOTHING_FACTOR;
+            smoothingRef.current.y + (avgY - smoothingRef.current.y) * SMOOTHING_FACTOR;
 
           ctx.beginPath();
           ctx.arc(smoothingRef.current.x, smoothingRef.current.y, 8, 0, 2 * Math.PI);
@@ -765,8 +824,7 @@ export default function App() {
           ctx.strokeStyle = '#fff';
           ctx.stroke();
 
-          // Use the SMOOTHED nose position for cursor control to reduce jitter
-          // while still reacting quickly to movement.
+          // Use the MULTI-SMOOTHED nose position for cursor control
           let normalizedX = 1 - smoothingRef.current.x / canvas.width;
           let normalizedY = smoothingRef.current.y / canvas.height;
           normalizedX = (normalizedX - 0.5) * NOSE_SENSITIVITY.x + 0.5;
@@ -787,7 +845,7 @@ export default function App() {
             x: Math.round(normalizedX * 100),
             y: Math.round(normalizedY * 100),
           });
-          cursorRef.current?.classList.remove('hidden');
+          cursorRef.current?.classList.remove('hidden', 'opacity-0');
           cursorRef.current?.classList.add('opacity-100');
           // Call detectEmotion - it will check if models are ready and isTracking
           // Use ref to avoid stale closure issues
@@ -800,7 +858,7 @@ export default function App() {
         }
       } else {
         cursorRef.current?.classList.remove('opacity-100');
-        cursorRef.current?.classList.add('hidden');
+        cursorRef.current?.classList.add('hidden', 'opacity-0');
         setStatusMessage('No face detected. Please re-align with the camera.');
       }
 
@@ -869,7 +927,7 @@ export default function App() {
 
     setIsTracking(false);
     cursorRef.current?.classList.remove('opacity-100');
-    cursorRef.current?.classList.add('hidden');
+    cursorRef.current?.classList.add('hidden', 'opacity-0');
 
     const canvas = canvasRef.current;
     if (canvas) {
@@ -1129,7 +1187,7 @@ export default function App() {
 
   const startRecording = useCallback(async () => {
     if (recordingState === 'recording' || !profileName.trim()) {
-      setUploadStatus('Please name this profile first.');
+      setRecordStatus('Please name this profile first.');
       return;
     }
     try {
@@ -1147,28 +1205,28 @@ export default function App() {
         const profileId = `profile_${Date.now()}`;
         try {
           setRecordingState('processing');
-          setUploadStatus('Creating voice model...');
+          setRecordStatus('Creating voice model...');
           setUploadProgress(0);
-          
+
           // Start progress simulation
           progressIntervalRef.current = window.setInterval(() => {
             setUploadProgress((prev) => {
               if (prev >= 95) return 95; // Stop at 95% until done
-              return prev + Math.random() * 3 + 1; // Increment by 1-4% (slower)
+              return prev + Math.random() * 8 + 3; // Increment by 1-4% (slower)
             });
           }, 800); // Slower interval
-          
+
           const voiceId = await uploadVoiceAsset(blob, profileId);
-          
+
           // Clear interval before setting to 100%
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
-          
+
           setUploadProgress(100);
           await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause at 100%
-          
+
           saveProfile({
             id: profileId,
             name: profileName.trim(),
@@ -1176,10 +1234,10 @@ export default function App() {
             source: 'recording',
             createdAt: new Date().toISOString(),
           });
-          setUploadStatus('Voice profile created from recording.');
+          setRecordStatus('Voice profile created from recording.');
         } catch (error) {
           console.error(error);
-          setUploadStatus('Recording processing failed.');
+          setRecordStatus('Recording processing failed.');
         } finally {
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
@@ -1203,10 +1261,10 @@ export default function App() {
         });
       }, 1000);
       setRecordingState('recording');
-      setUploadStatus('Recording in progress...');
+      setRecordStatus('Recording in progress...');
     } catch (error) {
       console.error('Recording error', error);
-      setUploadStatus('Microphone access denied or unavailable.');
+      setRecordStatus('Microphone access denied or unavailable.');
     }
   }, [recordingState, profileName, saveProfile, uploadVoiceAsset]);
 
@@ -1238,7 +1296,7 @@ export default function App() {
       progressIntervalRef.current = window.setInterval(() => {
         setUploadProgress((prev) => {
           if (prev >= 95) return 95; // Stop at 95% until done
-          return prev + Math.random() * 7 + 3; // Increment by 1-4% (slower)
+          return prev + Math.random() * 8 + 3; // Increment by 1-4% (slower)
         });
       }, 800); // Slower interval
       
@@ -1449,8 +1507,21 @@ export default function App() {
         candidateTimerRef.current = null;
         candidateElementRef.current = null;
       }
+      if (clickCooldownRef.current) {
+        clearTimeout(clickCooldownRef.current);
+        clickCooldownRef.current = null;
+      }
       return;
     }
+
+    // THROTTLE: Only run element detection every 100ms to reduce DOM query overhead
+    const now = performance.now();
+    const ELEMENT_DETECTION_THROTTLE = 100; // ms
+    if (now - lastElementDetectionRef.current < ELEMENT_DETECTION_THROTTLE) {
+      return; // Skip this update, too soon since last detection
+    }
+    lastElementDetectionRef.current = now;
+
     // Get all eligible elements at cursor point, then select the one with center closest to cursor
     const targetElements: Element[] = document.elementsFromPoint(
       cursorPosition.x,
@@ -1495,30 +1566,30 @@ export default function App() {
     // This ensures we only select keys that the cursor is truly focused on
     let eligible: HTMLElement | undefined;
     let bestOverlap = 0;
-    const MIN_OVERLAP_RATIO = 0.35; // Require at least 35% overlap (between 30-40%)
+    const MIN_OVERLAP_RATIO = 0.35; // Require at least 35% overlap - reduced slightly to support smaller buttons like info icons
     const CURSOR_SIZE = 20; // Approximate cursor radius in pixels
-    
+
     for (const el of eligibleElements) {
       const rect = el.getBoundingClientRect();
-      
+
       // Calculate overlap area between cursor circle and element rectangle
       const cursorLeft = cursorPosition.x - CURSOR_SIZE;
       const cursorRight = cursorPosition.x + CURSOR_SIZE;
       const cursorTop = cursorPosition.y - CURSOR_SIZE;
       const cursorBottom = cursorPosition.y + CURSOR_SIZE;
-      
+
       // Calculate intersection rectangle
       const overlapLeft = Math.max(cursorLeft, rect.left);
       const overlapRight = Math.min(cursorRight, rect.right);
       const overlapTop = Math.max(cursorTop, rect.top);
       const overlapBottom = Math.min(cursorBottom, rect.bottom);
-      
+
       // If there's an overlap
       if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
         const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
         const cursorArea = (CURSOR_SIZE * 2) * (CURSOR_SIZE * 2);
         const overlapRatio = overlapArea / cursorArea;
-        
+
         // Only consider elements with sufficient overlap
         if (overlapRatio >= MIN_OVERLAP_RATIO && overlapRatio > bestOverlap) {
           bestOverlap = overlapRatio;
@@ -1527,16 +1598,27 @@ export default function App() {
       }
     }
 
+    // Store the overlap ratio for dynamic dwell timing
+    if (eligible && bestOverlap > 0) {
+      currentOverlapRatioRef.current = bestOverlap;
+    }
+
     // HYSTERESIS: Don't switch immediately - wait to confirm cursor is stable on new element
     // This prevents rapid switching due to jitter and makes selection SUPER reliable
-    const HYSTERESIS_MS = 70; // Wait 70ms (between 50-80ms) before switching to new element
+    const HYSTERESIS_MS = 100; // Wait 100ms before switching - balanced for responsiveness and stability
     
     if (eligible === hoveredElementRef.current) {
-      // Same element - clear any candidate timer
+      // Same element - clear any candidate timer and update CSS animation if overlap changed
       if (candidateTimerRef.current) {
         clearTimeout(candidateTimerRef.current);
         candidateTimerRef.current = null;
         candidateElementRef.current = null;
+      }
+
+      // Update dwell duration dynamically as overlap changes
+      if (eligible && bestOverlap > 0) {
+        const newDwellDuration = calculateDwellTime(bestOverlap);
+        eligible.style.setProperty('--dwell-duration', `${newDwellDuration}ms`);
       }
       return;
     }
@@ -1569,39 +1651,85 @@ export default function App() {
               clearInterval(dwellRepeatRef.current);
               dwellRepeatRef.current = null;
             }
+            // Don't clear cooldown when switching elements - maintain it globally
+            // This prevents rapid clicks when moving between buttons
             
             // Set new hover
             hoveredElementRef.current = eligible;
             eligible.dataset.dwellActive = 'true';
+
+            // Calculate dynamic dwell time based on overlap
+            const dwellDuration = calculateDwellTime(currentOverlapRatioRef.current);
+
+            // Update CSS variable for animation
+            eligible.style.setProperty('--dwell-duration', `${dwellDuration}ms`);
+
             dwellTimerRef.current = window.setTimeout(() => {
+              const now = performance.now();
+
+              // Check if we're in cooldown period (prevent rapid re-clicks)
+              const CLICK_COOLDOWN_MS = 400; // 400ms cooldown between clicks
+              if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+                console.log('[Click] In cooldown, skipping click');
+                return;
+              }
+
+              // Execute the click
               eligible.dataset.dwellSelected = 'true';
               eligible.click();
+              lastClickTimeRef.current = now;
+
               setTimeout(() => {
                 eligible.dataset.dwellSelected = 'false';
               }, 250);
-              // After the first selection, start auto-repeat while the nose stays on this key.
-              const REPEAT_MS = 900;
+
+              // Clear any existing cooldown timer
+              if (clickCooldownRef.current) {
+                clearTimeout(clickCooldownRef.current);
+              }
+
+              // Set cooldown period - during this time, new dwell attempts won't trigger
+              clickCooldownRef.current = window.setTimeout(() => {
+                clickCooldownRef.current = null;
+              }, CLICK_COOLDOWN_MS);
+
+              // After the first click, start auto-repeat ONLY if user stays on button for longer
+              // This prevents accidental double-clicks while allowing intentional repeats
+              const REPEAT_DELAY_MS = 1800; // Wait 1.8s before starting repeat (longer than cooldown)
+              const REPEAT_INTERVAL_MS = 1000; // Then repeat every 1s
+
               if (dwellRepeatRef.current) {
                 clearInterval(dwellRepeatRef.current);
               }
-              dwellRepeatRef.current = window.setInterval(() => {
-                if (
-                  hoveredElementRef.current === eligible &&
-                  isTrackingRef.current
-                ) {
-                  eligible.dataset.dwellSelected = 'true';
-                  eligible.click();
-                  window.setTimeout(() => {
-                    eligible.dataset.dwellSelected = 'false';
-                  }, 180);
-                } else {
-                  if (dwellRepeatRef.current) {
-                    clearInterval(dwellRepeatRef.current);
-                    dwellRepeatRef.current = null;
-                  }
+
+              // Start repeat after delay (only if still hovering)
+              const repeatDelayTimer = window.setTimeout(() => {
+                if (hoveredElementRef.current === eligible && isTrackingRef.current) {
+                  dwellRepeatRef.current = window.setInterval(() => {
+                    if (
+                      hoveredElementRef.current === eligible &&
+                      isTrackingRef.current &&
+                      !clickCooldownRef.current // Don't repeat during cooldown
+                    ) {
+                      const repeatNow = performance.now();
+                      if (repeatNow - lastClickTimeRef.current >= CLICK_COOLDOWN_MS) {
+                        eligible.dataset.dwellSelected = 'true';
+                        eligible.click();
+                        lastClickTimeRef.current = repeatNow;
+                        window.setTimeout(() => {
+                          eligible.dataset.dwellSelected = 'false';
+                        }, 180);
+                      }
+                    } else {
+                      if (dwellRepeatRef.current) {
+                        clearInterval(dwellRepeatRef.current);
+                        dwellRepeatRef.current = null;
+                      }
+                    }
+                  }, REPEAT_INTERVAL_MS);
                 }
-              }, REPEAT_MS);
-            }, DWELL_SELECT_MS);
+              }, REPEAT_DELAY_MS);
+            }, dwellDuration);
             
             candidateElementRef.current = null;
             candidateTimerRef.current = null;
@@ -1611,7 +1739,7 @@ export default function App() {
       return; // Wait for hysteresis timer
     }
 
-    // No eligible element found - clear everything
+    // No eligible element found - clear everything except cooldown
     if (candidateTimerRef.current) {
       clearTimeout(candidateTimerRef.current);
       candidateTimerRef.current = null;
@@ -1629,6 +1757,7 @@ export default function App() {
       clearInterval(dwellRepeatRef.current);
       dwellRepeatRef.current = null;
     }
+    // Keep cooldown active even when cursor moves away to prevent rapid re-clicks
   }, [cursorPosition, isTracking]);
 
   useEffect(() => {
@@ -1800,6 +1929,7 @@ export default function App() {
               onManualDescriptionChange={setManualDescription}
               onManualSave={handleManualProfile}
               onUploadProfile={handleUploadProfile}
+              recordStatus={recordStatus}
               uploadStatus={uploadStatus}
               startRecording={startRecording}
               stopRecording={stopRecording}

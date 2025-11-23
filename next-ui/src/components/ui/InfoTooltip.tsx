@@ -19,10 +19,12 @@ export function InfoTooltip({ content }: InfoTooltipProps) {
         <button
           data-dwell-target="true"
           onClick={handleClick}
-          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-gray-400 hover:text-gray-600 transition-colors cursor-help flex-shrink-0 self-center"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-help flex-shrink-0 self-center"
           aria-label="More information"
+          style={{ minWidth: '28px', minHeight: '28px' }}
+          type="button"
         >
-          <InfoCircledIcon width={18} height={18} />
+          <InfoCircledIcon width={20} height={20} />
         </button>
       </HoverCard.Trigger>
       <HoverCard.Content

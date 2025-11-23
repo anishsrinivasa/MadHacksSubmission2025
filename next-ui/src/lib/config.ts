@@ -25,7 +25,7 @@ export const EMOTION_VOICE_PARAMS: Record<
   angry: { speed: 1.3, volume: 5 },
 };
 
-export const DWELL_SELECT_MS = 500;
+export const DWELL_SELECT_MS = 750; // 750ms dwell time to prevent accidental clicks
 
 export const NOSE_SENSITIVITY = {
   // Tuned to balance stability vs. required head movement.
@@ -37,7 +37,7 @@ export const NOSE_SENSITIVITY = {
 // Smoothing for nose tracking:
 //  - Lower values = more smoothing (less jitter) but more lag
 //  - Higher values = more responsive but can look jumpy
-export const SMOOTHING_FACTOR = 0.38;
+export const SMOOTHING_FACTOR = 0.25;
 
 export const EMOTION_MODEL_URLS = [
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
