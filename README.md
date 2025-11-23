@@ -2,7 +2,9 @@
 
 > **The Next-Gen Accessibility Tool That Actually Conveys Feeling**
 
-An innovative Augmentative and Alternative Communication (AAC) system that combines **Computer Vision** with **Fish Audio** to solve the biggest problem with current accessibility tools: **they sound like robots**.
+An innovative Augmentative and Alternative Communication (AAC) system that combines **Computer Vision**, **Machine Learning**, and **Fish Audio API** to solve the biggest problem with current accessibility tools: **they sound like robots**.
+
+**Built for MadHacks 2025 - Fish API Track**
 
 ## The Problem
 
@@ -21,8 +23,8 @@ This app uses your webcam for **two things simultaneously**:
 1. **Nose Tracking** (via MediaPipe Face Mesh): Select words and letters on a virtual keyboard by moving your nose
 2. **ML-Based Emotion Detection** (via face-api.js): Uses machine learning models to analyze your facial expressions in real-time (smile, frown, raised eyebrows)
 
-**The Fish Audio Hook:**
-- If you select "Hello" while **smiling** → the app sends `(happy) Hello` to Fish Audio
+**The Integration:**
+- If you select "Hello" while **smiling** → the app sends `(happy) Hello` to the API
 - If you select "No" while **frowning** → it sends `(angry) No`
 - The result? **Natural, expressive speech that actually conveys feeling**
 
@@ -50,7 +52,7 @@ This app uses your webcam for **two things simultaneously**:
 
 - **Nose Tracking**: Navigate and type using only nose movements - perfect for users with motor impairments
 - **ML-Based Real-time Emotion Detection**: Uses machine learning models (face-api.js) to automatically detect facial expressions (happy, sad, angry, surprised, neutral)
-- **Expressive Text-to-Speech**: Converts typed text to speech with emotion modulation using Fish Audio API
+- **Expressive Text-to-Speech**: Converts typed text to speech with emotion modulation
 - **Voice Search & Browser**: Search and select from 200,000+ voices using an autocomplete search interface with keyboard navigation
 - **Personal Voice Cloning**: Record or upload 30 seconds of audio to create your own personalized voice model
 - **Voice Management**: Clear your personal voice anytime and switch between personal, searched, or default voices
@@ -73,7 +75,7 @@ git clone https://github.com/anishsrinivasa/MadHacksSubmission2025.git
 cd MadHacksSubmission2025
 ```
 
-2. Install Python dependencies (for Fish Audio proxy):
+2. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
@@ -87,7 +89,7 @@ start.bat
 
 **Option B: Manual start (all platforms)**
 
-Terminal 1 - Fish Audio Proxy Server:
+Terminal 1 - Proxy Server:
 ```bash
 python proxy.py
 ```
@@ -102,8 +104,8 @@ python -m http.server 8000
 **Why two servers?**
 - **HTTP Server (port 8000)**: Serves the web application
 - **Proxy Server (port 5001)**: 
-  - Proxies Fish Audio API calls to avoid CORS restrictions
-  - Provides voice search endpoint using Fish Audio Python SDK
+  - Proxies API calls to avoid CORS restrictions
+  - Provides voice search endpoint using Python SDK
   - Handles voice cloning (create, status, clear) endpoints
   - Manages voice storage for personal voices
 
@@ -111,17 +113,17 @@ python -m http.server 8000
 
 1. The `config.js` file is already included with default settings. The API key is configured in `proxy.py`.
 
-2. Get your Fish Audio API key from [Fish Audio](https://fishaudio.com) and update it in `proxy.py`:
+2. Get your API key from [Fish Audio](https://fishaudio.com) and update it in `proxy.py`:
 ```python
 FISH_AUDIO_API_KEY = 'your_api_key_here'
 ```
 
-3. Install Python dependencies (includes Fish Audio SDK for voice search):
+3. Install Python dependencies (includes SDK for voice search):
 ```bash
 pip install -r requirements.txt
 ```
 
-**Note**: The Fish Audio Python SDK (`fish-audio-sdk`) is required for voice search functionality. If not installed, the system will fall back to REST API calls.
+**Note**: The Python SDK (`fish-audio-sdk`) is required for voice search functionality. If not installed, the system will fall back to REST API calls.
 
 ## How It Works
 
@@ -154,7 +156,7 @@ The app uses **machine learning models** (face-api.js) to continuously analyze y
 - **Raised eyebrows** → ML model detects as "surprised" → Speech will sound excited
 - **Neutral** → Default tone
 
-The ML models run entirely in your browser, processing facial landmarks and expression patterns in real-time. When you click "SPEAK", the app combines your typed text with your detected emotion and sends it to Fish Audio API, which generates natural, expressive speech.
+The ML models run entirely in your browser, processing facial landmarks and expression patterns in real-time. When you click "SPEAK", the app combines your typed text with your detected emotion and generates natural, expressive speech with the full range of human emotion.
 
 ## Use Cases
 
@@ -164,10 +166,14 @@ The ML models run entirely in your browser, processing facial landmarks and expr
 
 ## Technology Stack
 
+**Fish API Track Technologies:**
+- **Fish Audio API**: Core text-to-speech service with emotion modulation and expressive speech generation
+- **Fish Audio Python SDK**: Voice search and browsing functionality across 200,000+ voice library
+- **Fish Audio Voice Cloning**: Personal voice model creation and management
+
+**Supporting Technologies:**
 - **MediaPipe Face Mesh**: Nose tracking and facial landmark detection
 - **face-api.js**: ML-based real-time emotion recognition from facial expressions (uses TinyFaceDetector and FaceExpressionNet models)
-- **Fish Audio API**: Expressive text-to-speech with emotion modulation
-- **Fish Audio Python SDK**: Voice search and browsing functionality (200k+ voices)
 - **Flask**: Python proxy server for API calls and voice cloning endpoints
 - **Vanilla JavaScript**: No framework dependencies - lightweight and fast
 
@@ -179,7 +185,7 @@ MadHacksSubmission2025/
 ├── app.js              # Core application logic (nose tracking, emotion detection, TTS, voice search)
 ├── config.js           # Configuration (voice settings, emotion parameters)
 ├── style.css           # Styling
-├── proxy.py            # Fish Audio API proxy server (CORS, voice search, voice cloning)
+├── proxy.py            # API proxy server (CORS, voice search, voice cloning)
 ├── requirements.txt    # Python dependencies (Flask, Fish Audio SDK, Pillow)
 ├── start.bat           # Startup script (Windows) - runs both servers
 ├── voice_storage.json  # Local storage for personal voice IDs (auto-generated)
@@ -232,7 +238,7 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 - If you see CORS errors, make sure the proxy server is running
 
 ### Voice search not working
-- Ensure Fish Audio Python SDK is installed: `pip install fish-audio-sdk`
+- Ensure Python SDK is installed: `pip install fish-audio-sdk`
 - Check proxy server console for SDK initialization messages
 - The system will fall back to REST API if SDK is not available
 - Verify your API key has access to voice search features
@@ -249,7 +255,7 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 Traditional AAC tools strip away the human element of communication. This project bridges that gap by:
 
 1. **Keeping the Computer Vision hook** - Using webcam for hands-free input (nose tracking)
-2. **Adding Fish Audio** - Solving the robotic voice problem with expressive, emotion-modulated speech
+2. **Leveraging expressive speech synthesis** - Solving the robotic voice problem with emotion-modulated speech
 3. **Combining both simultaneously** - Detecting emotion while typing, then applying it to speech
 
 **Result**: Users can finally communicate with the full range of human expression, not just words.
@@ -260,7 +266,7 @@ MIT License - Feel free to use for your projects!
 
 ## Credits
 
-Built for **MadHacks 2025** - Combining accessibility with cutting-edge AI for expressive communication.
+Built for **MadHacks 2025 - Fish API Track** - Combining accessibility with cutting-edge AI for expressive communication.
 
 **The "Expressive" AAC Board** - Because communication should sound human, not robotic.
 
