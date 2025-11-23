@@ -90,7 +90,7 @@ header p {
 }
 
 .keyboard-cursor {
-    position: absolute;
+    position: fixed;  /* Changed from absolute - now positioned relative to viewport */
     width: 35px;
     height: 35px;
     background: radial-gradient(circle, rgba(59, 130, 246, 0.9) 0%, rgba(59, 130, 246, 0.6) 100%);
@@ -100,7 +100,7 @@ header p {
     transform: translate(-50%, -50%);
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 40px rgba(59, 130, 246, 0.4);
     transition: all 0.08s ease-out;
-    z-index: 100;
+    z-index: 9999;  /* Increased to ensure it's above all other elements */
     display: none;
 }
 
@@ -444,6 +444,35 @@ button:disabled {
     font-size: 0.9rem;
     margin-top: 15px;
     font-style: italic;
+}
+
+/* Full-page accessibility hover states */
+button.nose-hovering,
+.voice-option.nose-hovering {
+    background: #dbeafe !important;
+    border-color: #3b82f6 !important;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+}
+
+#startBtn.nose-hovering {
+    background: #059669 !important;
+}
+
+#stopBtn.nose-hovering {
+    background: #dc2626 !important;
+}
+
+/* Dwell progress animation for all interactive elements */
+button.nose-hovering::after,
+.voice-option.nose-hovering::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 4px;
+    background: #3b82f6;
+    animation: dwellProgress 0.5s linear forwards;
 }
 
 @media (max-width: 1024px) {

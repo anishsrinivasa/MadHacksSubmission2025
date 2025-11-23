@@ -39,7 +39,9 @@ const smoothingFactor = 0.3; // Lower = smoother but more lag
 
 // Keyboard state
 let currentText = '';
-let hoveredKey = null;
+
+// Universal element interaction state (for full-page accessibility)
+let hoveredElement = null;
 let dwellStartTime = null;
 const dwellTime = 500; // 0.5 seconds in milliseconds
 let dwellTimeout = null;
@@ -197,9 +199,8 @@ function onResults(results) {
         canvasCtx.lineWidth = 3;
         canvasCtx.stroke();
 
-        // Map nose position to keyboard cursor
+        // Map nose position to full viewport cursor (full-page accessibility)
         // Use normalized coordinates (0-1) from noseTip
-        const keyboardRect = keyboardWrapper.getBoundingClientRect();
 
         // Map nose position (invert X for natural movement)
         let normalizedX = 1 - noseTip.x; // Invert X for natural left-right
@@ -207,8 +208,8 @@ function onResults(results) {
 
         // Apply sensitivity multiplier for easier movement (higher = more sensitive)
         // Separate sensitivity for X and Y axes - Y needs more sensitivity for up/down
-        const sensitivityX = 2.5;
-        const sensitivityY = 3.5; // Higher sensitivity for vertical movement
+        const sensitivityX = 4.0;  // Increased from 2.5 for tilting instead of full head movement
+        const sensitivityY = 5.0;  // Increased from 3.5 for easier vertical navigation
         normalizedX = (normalizedX - 0.5) * sensitivityX + 0.5;
         normalizedY = (normalizedY - 0.5) * sensitivityY + 0.5;
 
@@ -216,11 +217,11 @@ function onResults(results) {
         normalizedX = Math.max(0, Math.min(1, normalizedX));
         normalizedY = Math.max(0, Math.min(1, normalizedY));
 
-        // Calculate cursor position within keyboard bounds
-        const cursorX = normalizedX * keyboardRect.width;
-        const cursorY = normalizedY * keyboardRect.height;
+        // Calculate cursor position within FULL VIEWPORT bounds
+        const cursorX = normalizedX * window.innerWidth;
+        const cursorY = normalizedY * window.innerHeight;
 
-        // Update keyboard cursor position (relative to keyboard wrapper)
+        // Update cursor position (fixed positioning relative to viewport)
         keyboardCursor.style.left = `${cursorX}px`;
         keyboardCursor.style.top = `${cursorY}px`;
         keyboardCursor.classList.add('active');
@@ -268,104 +269,149 @@ function onResults(results) {
 
     canvasCtx.restore();
 
-    // Check keyboard interaction
+    // Check element interaction (full-page accessibility)
     if (isTracking) {
-        checkKeyboardHover();
+        checkElementHover();
     }
 }
 
-// Check if keyboard cursor is hovering over a key
-function checkKeyboardHover() {
+// Universal element hover detection (full-page accessibility)
+function checkElementHover() {
     const cursorRect = keyboardCursor.getBoundingClientRect();
     const cursorCenterX = cursorRect.left + cursorRect.width / 2;
     const cursorCenterY = cursorRect.top + cursorRect.height / 2;
 
-    let foundKey = null;
+    // Get all elements under the cursor center point
+    const elementsAtPoint = document.elementsFromPoint(cursorCenterX, cursorCenterY);
 
-    keys.forEach(key => {
-        const keyRect = key.getBoundingClientRect();
-
-        // Check if cursor center is within key bounds
-        if (cursorCenterX >= keyRect.left &&
-            cursorCenterX <= keyRect.right &&
-            cursorCenterY >= keyRect.top &&
-            cursorCenterY <= keyRect.bottom) {
-            foundKey = key;
+    // Find first interactive element (buttons, keyboard keys, voice options)
+    let foundElement = null;
+    for (const element of elementsAtPoint) {
+        // Check for keyboard keys
+        if (element.classList.contains('key')) {
+            foundElement = element;
+            break;
         }
-    });
+        // Check for control buttons (Start/Stop Camera)
+        if (element.id === 'startBtn' || element.id === 'stopBtn') {
+            foundElement = element;
+            break;
+        }
+        // Check for voice selector labels
+        if (element.classList.contains('voice-option')) {
+            foundElement = element;
+            break;
+        }
+    }
 
-    // Handle key hover state
-    if (foundKey !== hoveredKey) {
+    // Handle element hover state change
+    if (foundElement !== hoveredElement) {
         // Clear previous hover
-        if (hoveredKey) {
-            hoveredKey.classList.remove('hovering');
+        if (hoveredElement) {
+            // Remove hover class based on element type
+            if (hoveredElement.classList.contains('key')) {
+                hoveredElement.classList.remove('hovering');
+            } else {
+                hoveredElement.classList.remove('nose-hovering');
+            }
             clearTimeout(dwellTimeout);
             dwellTimeout = null;
         }
 
         // Set new hover
-        hoveredKey = foundKey;
+        hoveredElement = foundElement;
 
-        if (hoveredKey) {
-            hoveredKey.classList.add('hovering');
+        if (hoveredElement) {
+            // Add hover class based on element type
+            if (hoveredElement.classList.contains('key')) {
+                hoveredElement.classList.add('hovering');
+            } else {
+                hoveredElement.classList.add('nose-hovering');
+            }
             dwellStartTime = Date.now();
 
             // Start dwell timer
             dwellTimeout = setTimeout(() => {
-                selectKey(hoveredKey);
+                selectElement(hoveredElement);
             }, dwellTime);
         }
     }
 }
 
-// Handle key selection
-function selectKey(key) {
-    const keyValue = key.getAttribute('data-key');
-
+// Universal element selection (handles all interactive elements)
+function selectElement(element) {
     // Add selection visual feedback
-    key.classList.add('selecting');
-    setTimeout(() => {
-        key.classList.remove('selecting', 'hovering');
-    }, 200);
-
-    // Handle different key types
-    if (keyValue === 'BACKSPACE') {
-        currentText = currentText.slice(0, -1);
-    } else if (keyValue === 'CLEAR') {
-        currentText = '';
-    } else if (keyValue === 'ENTER') {
-        // Check cooldown before speaking
-        if (speakCooldown) {
-            console.log('SPEAK button on cooldown, please wait...');
-            status.textContent = 'Please wait (cooldown)...';
-            status.style.color = '#f59e0b';
-            return;
-        }
-
-        // DEBUG: Log emotion state at button press
-        console.log('=== SPEAK BUTTON PRESSED ===');
-        console.log('currentEmotion value:', currentEmotion);
-        console.log('currentEmotion type:', typeof currentEmotion);
-        console.log('emotionConfidence:', emotionConfidence);
-
-        // Trigger text-to-speech with detected emotion
-        speakText(currentText, currentEmotion);
-
-        // Set cooldown for 2 seconds
-        speakCooldown = true;
+    if (element.classList.contains('key')) {
+        element.classList.add('selecting');
         setTimeout(() => {
-            speakCooldown = false;
-            console.log('SPEAK button cooldown expired');
-        }, 2000);
+            element.classList.remove('selecting', 'hovering');
+        }, 200);
     } else {
-        currentText += keyValue;
+        element.classList.remove('nose-hovering');
     }
 
-    // Update text display
-    textOutput.textContent = currentText;
+    // Handle different element types
+    if (element.classList.contains('key')) {
+        // Keyboard key selected
+        const keyValue = element.getAttribute('data-key');
+
+        // Handle different key types
+        if (keyValue === 'BACKSPACE') {
+            currentText = currentText.slice(0, -1);
+        } else if (keyValue === 'CLEAR') {
+            currentText = '';
+        } else if (keyValue === 'ENTER') {
+            // Check cooldown before speaking
+            if (speakCooldown) {
+                console.log('SPEAK button on cooldown, please wait...');
+                status.textContent = 'Please wait (cooldown)...';
+                status.style.color = '#f59e0b';
+                return;
+            }
+
+            // DEBUG: Log emotion state at button press
+            console.log('=== SPEAK BUTTON PRESSED ===');
+            console.log('currentEmotion value:', currentEmotion);
+            console.log('currentEmotion type:', typeof currentEmotion);
+            console.log('emotionConfidence:', emotionConfidence);
+
+            // Trigger text-to-speech with detected emotion
+            speakText(currentText, currentEmotion);
+
+            // Set cooldown for 2 seconds
+            speakCooldown = true;
+            setTimeout(() => {
+                speakCooldown = false;
+                console.log('SPEAK button cooldown expired');
+            }, 2000);
+        } else {
+            currentText += keyValue;
+        }
+
+        // Update text display
+        textOutput.textContent = currentText;
+    } else if (element.id === 'startBtn') {
+        // Start Camera button selected
+        if (!element.disabled) {
+            startTracking();
+        }
+    } else if (element.id === 'stopBtn') {
+        // Stop Camera button selected
+        if (!element.disabled) {
+            stopTracking();
+        }
+    } else if (element.classList.contains('voice-option')) {
+        // Voice selector option selected
+        const radioInput = element.querySelector('input[type="radio"]');
+        if (radioInput) {
+            radioInput.checked = true;
+            selectedVoice = radioInput.value;
+            console.log(`Voice changed to: ${selectedVoice} (via nose selection)`);
+        }
+    }
 
     // Clear hover state
-    hoveredKey = null;
+    hoveredElement = null;
     clearTimeout(dwellTimeout);
     dwellTimeout = null;
 }
@@ -704,10 +750,15 @@ async function speakText(text, emotion) {
         console.log('Speed (from emotion):', voiceParams.speed);
         console.log('Volume (from emotion):', voiceParams.volume);
 
+        // Convert numbers to words for better TTS pronunciation
+        const processedText = convertTextNumbers(text);
+        console.log('Original text:', text);
+        console.log('Processed text (numbers→words):', processedText);
+
         // Prepare request payload with correct Fish Audio API format
         // Speed and volume must be nested inside 'prosody' object
         const requestBody = {
-            text: text,  // Original text without prefixes
+            text: processedText,  // Text with numbers converted to words
             reference_id: voiceReferenceId, // Male or Female voice
             format: 'mp3',
             mp3_bitrate: 128,
@@ -843,17 +894,17 @@ function speakWithWebSpeech(text, emotion) {
     utterance.volume = 1.0;
 
     if (emotion === 'happy') {
-        utterance.rate = 1.3;   // Much faster for happiness
-        utterance.pitch = 1.4;  // Higher pitch for cheerfulness
+        utterance.rate = 1.0;   // Much faster for happiness
+        utterance.pitch = 1.3;  // Higher pitch for cheerfulness
     } else if (emotion === 'sad') {
-        utterance.rate = 0.7;   // Much slower for sadness
-        utterance.pitch = 0.7;  // Lower pitch for melancholy
+        utterance.rate = 0.5;   // Much slower for sadness
+        utterance.pitch = 1.5;  // Lower pitch for melancholy
     } else if (emotion === 'angry') {
-        utterance.rate = 1.2;   // Faster for intensity
-        utterance.pitch = 0.8;  // Lower pitch for anger
+        utterance.rate = 1.5;   // Faster for intensity
+        utterance.pitch = 0.5;  // Lower pitch for anger
     } else if (emotion === 'surprised') {
-        utterance.rate = 1.5;   // Very fast for surprise
-        utterance.pitch = 1.5;  // Very high pitch for excitement
+        utterance.rate = 2.0;   // Very fast for surprise
+        utterance.pitch = 2.5;  // Very high pitch for excitement
     }
 
     console.log('Speech parameters:', {
