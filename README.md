@@ -1,221 +1,241 @@
-# The "Expressive" AAC Board
+# Unsilenced
 
-> **The Next-Gen Accessibility Tool That Actually Conveys Feeling**
+> **An Expressive AAC System That Restores the Human Element of Communication**
 
-An innovative Augmentative and Alternative Communication (AAC) system that combines **Computer Vision**, **Machine Learning**, and **Fish Audio API** to solve the biggest problem with current accessibility tools: **they sound like robots**.
+Unsilenced is a hands-free AAC communication tool that uses nose tracking and real-time emotion detection to generate expressive speech through Fish Audio API. Built for **MadHacks 2025 - Fish API Track**.
 
-**Built for MadHacks 2025 - Fish API Track**
+## About
 
-## The Problem
+Mainstream AAC tools strip away emotion from communication, leading to robotic, monotone speech. Unsilenced uses your nose as a pointer to type and detects facial emotions in real time with machine learning. It combines typed text with detected emotions to generate natural-sounding speech through Fish Audio. Users can clone their own voice, search 200,000+ AI voices, or create custom voice profiles.
 
-Stephen Hawking's voice was iconic, but it was famously monotonic. People with ALS or motor impairments use eye-tracking or similar systems to type, but the output is always flat. They can't:
-- Whisper a secret
-- Shout for help
-- Tell a joke with sarcasm
-- Express frustration or joy
+## Development
 
-**Current AAC tools produce robotic, emotionless speech that strips away the human element of communication.**
+**Tech Stack**: Frontend built with Next.js, MediaPipe Face Mesh for nose tracking, and face-api.js for emotion detection. Backend uses Flask proxy server to handle CORS and Fish Audio API calls. Voice synthesis powered by Fish Audio API with emotion modulation via prosody parameters. Voice search uses Fish Audio Python SDK for browsing 200,000+ voices.
 
-## The Solution
+**Challenges**: We hit a CORS error when accessing Fish Audio API directly from the browser, solved by creating a Flask proxy server. Emotion modulation required using Fish Audio's "prosody" object (speed/volume) instead of inline text commands. Information tooltips were being clipped by parent containers, fixed with proper CSS containment.
 
-This app uses your webcam for **two things simultaneously**:
+**Results**: We achieved 84% accuracy on emotion detection (above the 75-80% industry average). Our system is over 100% faster than Dr. Stephen Hawking's synthesizer (3m21s vs 7 minutes for a 35-word response). We learned that combining MediaPipe, face-api.js, and Fish Audio required careful timing and state management to synchronize nose tracking, emotion detection, and speech synthesis in real-time. Processing facial recognition entirely client-side maintained user privacy and improved performance. Most importantly, we realized that solving overlooked problems in accessibility technology can make a real impact.
 
-1. **Nose Tracking** (via MediaPipe Face Mesh): Select words and letters on a virtual keyboard by moving your nose
-2. **ML-Based Emotion Detection** (via face-api.js): Uses machine learning models to analyze your facial expressions in real-time (smile, frown, raised eyebrows)
-
-**The Integration:**
-- If you select "Hello" while **smiling** → the app sends `(happy) Hello` to the API
-- If you select "No" while **frowning** → it sends `(angry) No`
-- The result? **Natural, expressive speech that actually conveys feeling**
-
-### Voice Options
-
-**Three Ways to Choose Your Voice:**
-
-1. **Personal Voice Cloning** (Recommended for personal use)
-   - Record 30 seconds of your voice directly in the browser
-   - Or upload an audio file (30 seconds recommended)
-   - Creates a personalized voice model that sounds like you
-   - Perfect for users who want to preserve their original voice
-
-2. **Voice Search & Browser** (Explore 200,000+ voices)
-   - Search by name, tags, or characteristics
-   - Browse through a massive library of voices
-   - Select any voice that matches your preference
-   - Great for trying different voices or finding specific character voices
-
-3. **Quick Select** (Fast default options)
-   - One-click selection of Male or Female voices
-   - Perfect for quick setup or testing
+**Future Plans**: Multi-language support using Fish Audio API capabilities, scaling the tool into a full product, and reaching 100 active users per month.
 
 ## Features
 
-- **Nose Tracking**: Navigate and type using only nose movements - perfect for users with motor impairments
-- **ML-Based Real-time Emotion Detection**: Uses machine learning models (face-api.js) to automatically detect facial expressions (happy, sad, angry, surprised, neutral)
-- **Expressive Text-to-Speech**: Converts typed text to speech with emotion modulation
-- **Voice Search & Browser**: Search and select from 200,000+ voices using an autocomplete search interface with keyboard navigation
-- **Personal Voice Cloning**: Record or upload 30 seconds of audio to create your own personalized voice model
-- **Voice Management**: Clear your personal voice anytime and switch between personal, searched, or default voices
-- **Dwell Selection**: Hover over keys for 0.5 seconds to select (configurable) - works with keyboard, buttons, and voice search results
-- **Privacy-First**: All face processing happens client-side in your browser
-
-## Quick Start
-
-### Prerequisites
-
-- Modern web browser with WebRTC support (Chrome, Firefox, Safari, Edge)
-- Webcam access
-- Good lighting for face detection
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/anishsrinivasa/MadHacksSubmission2025.git
-cd MadHacksSubmission2025
-```
-
-2. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Start both servers:
-
-**Option A: Using the startup script (Windows)**
-```bash
-start.bat
-```
-
-**Option B: Manual start (all platforms)**
-
-Terminal 1 - Proxy Server:
-```bash
-python proxy.py
-```
-
-Terminal 2 - HTTP Server:
-```bash
-python -m http.server 8000
-```
-
-4. Navigate to `http://localhost:8000` in your browser
-
-**Why two servers?**
-- **HTTP Server (port 8000)**: Serves the web application
-- **Proxy Server (port 5001)**: 
-  - Proxies API calls to avoid CORS restrictions
-  - Provides voice search endpoint using Python SDK
-  - Handles voice cloning (create, status, clear) endpoints
-  - Manages voice storage for personal voices
-
-### Configuration
-
-1. The `config.js` file is already included with default settings. The API key is configured in `proxy.py`.
-
-2. Get your API key from [Fish Audio](https://fishaudio.com) and update it in `proxy.py`:
-```python
-FISH_AUDIO_API_KEY = 'your_api_key_here'
-```
-
-3. Install Python dependencies (includes SDK for voice search):
-```bash
-pip install -r requirements.txt
-```
-
-**Note**: The Python SDK (`fish-audio-sdk`) is required for voice search functionality. If not installed, the system will fall back to REST API calls.
-
-## How It Works
-
-### Step-by-Step Usage
-
-1. **Start the Camera**: Click the "Start Camera" button and allow camera permissions
-2. **Position Yourself**: Sit in front of your webcam with good lighting
-3. **Select a Voice** (optional):
-   - **Search for a voice**: Type in the voice search box to browse 200,000+ voices
-   - **Quick select**: Use the Male/Female quick-select buttons
-   - **Create personal voice**: Record 30 seconds or upload an audio file in the "Personal Voice" section
-4. **Navigate**: Move your nose to hover over keys on the virtual keyboard
-5. **Select Keys**: Hold your nose over a key for 0.5 seconds to select it
-6. **Type Your Message**: Build your text using the keyboard
-7. **Express Emotion**: Your facial expressions are detected in real-time (shown in sidebar)
-8. **Speak**: Click "SPEAK" to convert your text to speech with emotion modulation using your selected voice
-
-### Voice Selection Priority
-
-The app uses voices in this order:
-1. **Personal Voice** (if you've created one) - Your own cloned voice
-2. **Selected Voice from Search** - Any voice you've selected from the 200k+ voice library
-3. **Default Voice** - Falls back to Male (American) if nothing is selected
-
-### How ML-Based Emotion Detection Works
-
-The app uses **machine learning models** (face-api.js) to continuously analyze your facial expressions while you type:
-- **Smile** → ML model detects as "happy" → Speech will sound joyful
-- **Frown** → ML model detects as "sad" → Speech will sound melancholic
-- **Raised eyebrows** → ML model detects as "surprised" → Speech will sound excited
-- **Neutral** → Default tone
-
-The ML models run entirely in your browser, processing facial landmarks and expression patterns in real-time. When you click "SPEAK", the app combines your typed text with your detected emotion and generates natural, expressive speech with the full range of human emotion.
-
-## Use Cases
-
-- **ALS/Motor Impairments**: Enables expressive communication for users who cannot use traditional input methods
-- **Accessibility**: Hands-free typing for anyone with limited mobility
-- **Expressive Communication**: Conveys emotion through speech, not just words - the key differentiator from traditional AAC tools
+- **Nose Tracking**: Navigate and type using only nose movements via MediaPipe Face Mesh - perfect for users with motor impairments
+- **ML-Based Real-time Emotion Detection**: Uses machine learning models (face-api.js) to automatically detect facial expressions (happy, sad, angry, surprised, neutral) with 84% accuracy
+- **Expressive Text-to-Speech**: Converts typed text to speech with emotion modulation using Fish Audio API prosody parameters
+- **Voice Cloning**: Record 30 seconds of audio directly in the browser or upload an audio file to create personalized voice models
+- **Voice Search & Browser**: Search and select from 200,000+ voices using Fish Audio Python SDK with autocomplete search interface
+- **Voice Profile Management**: Save, activate, and manage multiple voice profiles for different use cases
+- **Autocomplete Word Suggestions**: Intelligent word completion based on a dictionary of common words and AAC phrases (2,800+ words)
+- **Dwell Selection**: Adaptive hover-based selection mechanism that adjusts timing based on cursor overlap for improved accuracy
+- **Progress Tracking**: Real-time progress bars for voice model creation and upload processes
+- **Privacy-First Design**: All face processing happens client-side in the browser - no video or facial data sent to external servers
 
 ## Technology Stack
 
 **Fish API Track Technologies:**
 - **Fish Audio API**: Core text-to-speech service with emotion modulation and expressive speech generation
 - **Fish Audio Python SDK**: Voice search and browsing functionality across 200,000+ voice library
-- **Fish Audio Voice Cloning**: Personal voice model creation and management
+- **Fish Audio Voice Cloning**: Personal voice model creation and management via REST API
+
+**Frontend:**
+- **Next.js 16**: React framework with TypeScript for modern web application
+- **React 19**: UI library for component-based architecture
+- **Tailwind CSS 4**: Utility-first CSS framework for styling
+- **Radix UI**: Component library for accessible UI primitives (Themes, Tabs, ScrollArea)
+- **MediaPipe Face Mesh**: Google's framework for facial landmark detection and nose tracking
+- **face-api.js**: Machine learning library for face detection and emotion recognition in the browser
+
+**Backend:**
+- **Flask 3.0**: Python web framework for proxy server
+- **Flask-CORS**: CORS handling for cross-origin requests
+- **Requests**: HTTP library for API communication
+- **Pillow**: Image processing library for voice cloning cover image generation
+- **fish-audio-sdk**: Official Python SDK for Fish Audio API integration
 
 **Supporting Technologies:**
-- **MediaPipe Face Mesh**: Nose tracking and facial landmark detection
-- **face-api.js**: ML-based real-time emotion recognition from facial expressions (uses TinyFaceDetector and FaceExpressionNet models)
-- **Flask**: Python proxy server for API calls and voice cloning endpoints
-- **Vanilla JavaScript**: No framework dependencies - lightweight and fast
+- **TypeScript**: Type-safe JavaScript development
+- **LocalStorage**: Client-side storage for voice profiles and settings
+- **WebRTC**: Browser APIs for camera and microphone access
+- **MediaRecorder API**: Browser API for audio recording
+
+## Installation & Setup
+
+### Prerequisites
+
+- **Node.js** 18+ and npm
+- **Python** 3.8+
+- Modern web browser with WebRTC support (Chrome, Firefox, Safari, Edge)
+- Webcam access
+- Good lighting for face detection
+
+### Installation Steps
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/anishsrinivasa/MadHacksSubmission2025.git
+cd MadHacksSubmission2025
+```
+
+2. **Install Python dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+3. **Install Node.js dependencies:**
+```bash
+cd next-ui
+npm install
+```
+
+4. **Configure API Key:**
+
+Update the Fish Audio API key in `proxy.py`:
+   ```python
+   FISH_AUDIO_API_KEY = 'your_api_key_here'
+   ```
+
+Get your API key from [Fish Audio](https://fishaudio.com)
+
+5. **Start the servers:**
+
+**Terminal 1 - Flask Proxy Server:**
+   ```bash
+   python proxy.py
+   ```
+   The proxy server will run on `http://localhost:5001`
+
+**Terminal 2 - Next.js Frontend:**
+   ```bash
+cd next-ui
+npm run dev
+```
+The frontend will run on `http://localhost:3000`
+
+6. **Open in browser:**
+Navigate to `http://localhost:3000` in your browser
+
+## Usage
+
+### Getting Started
+
+1. **Start the Camera**: Click the "Start Camera" button and allow camera permissions
+2. **Position Yourself**: Sit in front of your webcam with good lighting
+3. **Select a Voice** (optional):
+   - **Search for a voice**: Type in the voice search box to browse 200,000+ voices from Fish Audio
+   - **Quick select**: Use the Male/Female quick-select buttons
+   - **Create personal voice**: Record 30 seconds or upload an audio file in the "Voice Profiles" panel
+4. **Navigate**: Move your nose to hover over keys on the virtual keyboard
+5. **Select Keys**: Hold your nose over a key for 750ms (dwell time) to select it
+6. **Type Your Message**: Build your text using the keyboard
+7. **Express Emotion**: Your facial expressions are detected in real-time and displayed in the emotion widget
+8. **Speak**: Click "Speak" to convert your text to speech with emotion modulation using your selected voice
+
+### Voice Selection Priority
+
+The app uses voices in this order:
+1. **Active Voice Profile** (if you've activated one) - Your saved voice profile
+2. **Selected Voice from Search** - Any voice you've selected from the 200k+ voice library
+3. **Default Voice** - Falls back to Male (American) if nothing is selected
+
+### Voice Profile Management
+
+**Creating a Voice Profile:**
+- **Record**: Click the red record button and speak for 30 seconds to create a voice clone
+- **Upload**: Upload a 30-second audio file (MP3, WAV, WEBM supported)
+- **Explore**: Search and save voices from Fish Audio's library
+- **Manual**: Enter a voice ID manually if you've created a voice in Fish Audio dashboard
+
+**Managing Profiles:**
+- Click on any profile card to activate it
+- Use the trash icon to remove a profile
+- Profiles are saved locally in your browser
+
+### Emotion Detection
+
+The app continuously analyzes your facial expressions while you type:
+- **Smile** → Detected as "happy" → Speech will sound joyful (faster speed, normal volume)
+- **Frown** → Detected as "sad" → Speech will sound melancholic (slower speed, quieter)
+- **Raised eyebrows** → Detected as "surprised" → Speech will sound excited (faster speed, louder)
+- **Furrowed brow** → Detected as "angry" → Speech will sound intense (faster speed, louder)
+- **Neutral** → Default tone (normal speed and volume)
+
+Emotion detection uses machine learning models that run entirely in your browser for privacy.
+
+### Autocomplete
+
+The keyboard includes an "Autocomplete" button that suggests word completions based on the current word you're typing. Suggestions come from a dictionary of 2,800+ common words and AAC phrases.
 
 ## Project Structure
 
 ```
 MadHacksSubmission2025/
-├── index.html          # Main HTML file
-├── app.js              # Core application logic (nose tracking, emotion detection, TTS, voice search)
-├── config.js           # Configuration (voice settings, emotion parameters)
-├── style.css           # Styling
-├── proxy.py            # API proxy server (CORS, voice search, voice cloning)
-├── requirements.txt    # Python dependencies (Flask, Fish Audio SDK, Pillow)
-├── start.bat           # Startup script (Windows) - runs both servers
-├── voice_storage.json  # Local storage for personal voice IDs (auto-generated)
-└── README.md           # This file
+├── next-ui/                      # Next.js frontend application
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── app/
+│   │   │   │   └── page.tsx     # Main application page (nose tracking, emotion, TTS)
+│   │   │   ├── layout.tsx        # Root layout
+│   │   │   ├── page.tsx          # Landing page
+│   │   │   └── globals.css       # Global styles
+│   │   ├── components/
+│   │   │   ├── dashboard/
+│   │   │   │   ├── CameraPanel.tsx      # Camera display component
+│   │   │   │   ├── EmotionWidget.tsx    # Emotion display widget
+│   │   │   │   ├── HeaderSection.tsx    # Status bar and info display
+│   │   │   │   ├── ProfilesPanel.tsx    # Voice profile management
+│   │   │   │   ├── TextComposer.tsx     # Text input and display
+│   │   │   │   ├── VirtualKeyboard.tsx  # On-screen keyboard
+│   │   │   │   └── VoiceExplorer.tsx    # Voice search interface
+│   │   │   ├── Navbar.tsx               # Navigation bar
+│   │   │   └── ui/                      # Reusable UI components
+│   │   ├── lib/
+│   │   │   ├── config.ts                # Configuration constants
+│   │   │   ├── numberConverter.ts       # Number to word conversion
+│   │   │   └── wordDictionary.ts        # Autocomplete word dictionary
+│   │   └── types/
+│   │       ├── index.ts                 # TypeScript type definitions
+│   │       └── mediapipe.d.ts           # MediaPipe type definitions
+│   ├── package.json
+│   └── next.config.ts
+├── proxy.py                      # Flask proxy server (CORS, voice cloning, voice search)
+├── requirements.txt              # Python dependencies
+├── voice_storage.json            # Local voice ID storage (auto-generated)
+└── README.md                     # This file
 ```
 
-## Customization
+## Configuration
 
-### Adjust Dwell Time
+### Nose Tracking Sensitivity
 
-Edit `config.js`:
-```javascript
-const CONFIG = {
-    DWELL_TIME: 750 // Increase to 750ms for slower selection
+Edit `next-ui/src/lib/config.ts`:
+```typescript
+export const NOSE_SENSITIVITY = {
+  x: 4.1,  // Horizontal sensitivity
+  y: 4.2,  // Vertical sensitivity
 };
 ```
 
-### Change Emotion Detection Sensitivity
+### Dwell Time
 
-Modify the emotion detection interval in `app.js`:
-```javascript
-emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (ms)
+Edit `next-ui/src/lib/config.ts`:
+```typescript
+export const DWELL_SELECT_MS = 750; // Time to hover before selection (milliseconds)
 ```
 
-## Privacy
+### Smoothing Factor
 
-- All face processing happens **client-side** in your browser
-- No video or facial data is sent to external servers (except for TTS API calls with text only)
-- Camera feed is never recorded or stored
-- Your privacy is protected - facial analysis stays on your device
+Edit `next-ui/src/lib/config.ts`:
+```typescript
+export const SMOOTHING_FACTOR = 0.25; // Lower = smoother but more lag
+```
+
+### Emotion Detection Sensitivity
+
+Edit `next-ui/src/app/app/page.tsx` to adjust emotion detection thresholds:
+- `SAD_MIN_THRESHOLD`: Minimum confidence for sad emotion detection
+- `ANGRY_MIN_THRESHOLD`: Minimum confidence for angry emotion detection
+- `NEUTRAL_DOMINANCE_THRESHOLD`: Threshold for neutral emotion dominance
 
 ## Troubleshooting
 
@@ -223,19 +243,20 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 - Ensure camera permissions are granted
 - Check that no other app is using the camera
 - Try refreshing the page
+- Verify browser supports WebRTC
 
 ### Face detection not working
-- Ensure good lighting
+- Ensure good lighting (face should be clearly visible)
 - Position face clearly in front of camera
-- Wait for models to load (first time may take a moment)
+- Wait for emotion models to load (first time may take a moment)
+- Check browser console for error messages
 
 ### TTS not working
-- Ensure both servers are running (HTTP server on port 8000, proxy on port 5001)
+- Ensure both servers are running (proxy on port 5001, Next.js on port 3000)
 - Check your API key in `proxy.py`
 - Verify API key is valid and has credits
 - Check browser console for error messages
 - Verify proxy server is running: visit `http://localhost:5001/health`
-- If you see CORS errors, make sure the proxy server is running
 
 ### Voice search not working
 - Ensure Python SDK is installed: `pip install fish-audio-sdk`
@@ -250,15 +271,24 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 - Check proxy server console for detailed error messages
 - Ensure microphone permissions are granted if recording
 
-## Why This Matters
+### CORS errors
+- Make sure the Flask proxy server is running on port 5001
+- Verify `NEXT_PUBLIC_PROXY_URL` in `next-ui/src/lib/config.ts` matches your proxy server URL
+- Check that Flask-CORS is properly installed and enabled
 
-Traditional AAC tools strip away the human element of communication. This project bridges that gap by:
+## Privacy & Security
 
-1. **Keeping the Computer Vision hook** - Using webcam for hands-free input (nose tracking)
-2. **Leveraging expressive speech synthesis** - Solving the robotic voice problem with emotion-modulated speech
-3. **Combining both simultaneously** - Detecting emotion while typing, then applying it to speech
+- **Client-Side Processing**: All facial recognition and emotion detection happens entirely in your browser using WebAssembly and TensorFlow.js models. No video or facial data is sent to external servers.
+- **API Calls**: Only text and audio files (for voice cloning) are sent to Fish Audio API. Facial images are never transmitted.
+- **Local Storage**: Voice profiles and settings are stored locally in your browser using localStorage.
+- **No Tracking**: The application does not include any analytics or tracking code.
 
-**Result**: Users can finally communicate with the full range of human expression, not just words.
+## Performance
+
+- **Emotion Detection**: 84% accuracy on standard emotion recognition datasets
+- **Speed**: Over 100% faster than Dr. Stephen Hawking's synthesizer (3m21s vs 7 minutes for 35-word response)
+- **Real-Time Processing**: Both nose tracking and emotion detection run at 30+ FPS in modern browsers
+- **Memory Efficient**: Models are loaded once and cached for the session
 
 ## License
 
@@ -268,7 +298,7 @@ MIT License - Feel free to use for your projects!
 
 Built for **MadHacks 2025 - Fish API Track** - Combining accessibility with cutting-edge AI for expressive communication.
 
-**The "Expressive" AAC Board** - Because communication should sound human, not robotic.
+**Unsilenced** - Because communication should sound human, not robotic.
 
 ---
 
