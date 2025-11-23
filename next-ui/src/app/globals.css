@@ -117,8 +117,8 @@ body {
   right: 0;
   bottom: 0;
   height: 4px;
-  /* High-contrast white bar so dwell progress is clearly visible on all key colors */
-  background: rgba(255, 255, 255, 0.95);
+  /* Black progress bar for dwell selection */
+  background: rgba(0, 0, 0, 0.9);
   transform-origin: left center;
   transform: scaleX(0);
   opacity: 0;

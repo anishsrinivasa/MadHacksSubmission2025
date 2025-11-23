@@ -3,8 +3,8 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import clsx from 'clsx';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline';
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -18,6 +18,7 @@ const buttonVariants = {
   secondary: 'bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 text-[var(--madhacks-dark-blue)] hover:from-blue-100 hover:to-blue-200',
   ghost: 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200',
   danger: 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200',
+  success: 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200',
   outline: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
 };
 
@@ -25,6 +26,7 @@ const buttonSizes = {
   sm: 'px-3 py-1.5 text-sm',
   md: 'px-4 py-2 text-sm',
   lg: 'px-6 py-3 text-base',
+  xl: 'px-8 py-4 text-lg font-semibold',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

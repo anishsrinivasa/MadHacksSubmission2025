@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { Text } from "@radix-ui/themes";
+import { Text, Flex } from "@radix-ui/themes";
 import { Card } from "@/components/ui/Card";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 type TextComposerProps = {
   text: string;
@@ -15,15 +16,6 @@ export function TextComposer({ text, suggestion, onClear }: TextComposerProps) {
   const pendingSuffix = suggestion
     ? suggestion.slice(text.trim().split(/\s+/).pop()?.length ?? 0)
     : "";
-
-  const headerMeta = (
-    <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] text-gray-400">
-      <span className="flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-[var(--madhacks-blue)]" />
-        {text.length} chars
-      </span>
-    </div>
-  );
 
   const renderCaret = (isEmpty: boolean) => (
     <span
@@ -37,12 +29,12 @@ export function TextComposer({ text, suggestion, onClear }: TextComposerProps) {
   );
 
   return (
-    <Card 
+    <Card
       header={
-        <div className="flex items-center justify-between gap-6">
+        <Flex align="center" gap="2">
           <SectionHeading title="Text Composer" size="md" />
-          {headerMeta}
-        </div>
+          <InfoTooltip content="Type your message using nose tracking. Press the Autocomplete button to complete words, and use the SPEAK button to hear your text with emotional expression." />
+        </Flex>
       }
       padding="md"
       className="h-full flex flex-col gap-3"
@@ -52,7 +44,7 @@ export function TextComposer({ text, suggestion, onClear }: TextComposerProps) {
           <div className="h-full overflow-y-auto leading-relaxed">
             {text.length === 0 ? (
               <Text size="4" color="gray" className="select-none opacity-50">
-                Start typing with your nose or keyboard…{renderCaret(true)}
+                Start typing with your nose...{renderCaret(true)}
               </Text>
             ) : (
               <Text

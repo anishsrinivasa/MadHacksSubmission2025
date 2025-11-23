@@ -1,6 +1,6 @@
 export type Emotion = 'happy' | 'sad' | 'neutral' | 'surprised' | 'angry';
 
-export type VoiceProfileSource = 'fish' | 'recording' | 'upload' | 'manual';
+export type VoiceProfileSource = 'library' | 'recording' | 'upload' | 'manual';
 
 export interface VoiceProfile {
   id: string;

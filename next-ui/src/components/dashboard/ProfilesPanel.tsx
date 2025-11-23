@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 type ProfilesPanelProps = {
   mounted: boolean;
@@ -80,8 +81,15 @@ export function ProfilesPanel({
   const [deleteTarget, setDeleteTarget] = useState<VoiceProfile | null>(null);
   return (
     <>
-      <Card 
-        header={<SectionHeading title="Voice Profiles" subtitle="Manage your personalized voices." />}
+      <Card
+        header={
+          <Flex direction="column" gap="1">
+            <Flex align="center" gap="2">
+              <SectionHeading title="Voice Profiles" subtitle="Manage your personalized voices." />
+              <InfoTooltip content="Create custom voice profiles by recording, uploading audio, or exploring 200,000+ voices from Fish Audio. Each profile can be used for expressive text-to-speech." />
+            </Flex>
+          </Flex>
+        }
         padding="none"
         className="h-full min-h-0 flex flex-col"
       >
@@ -94,24 +102,28 @@ export function ProfilesPanel({
           >
             <Tabs.Trigger
               value="profiles"
+              data-dwell-target="true"
               className="cursor-pointer px-1 pb-2 border-b-2 border-transparent text-gray-500 data-[state=active]:border-[var(--madhacks-teal)] data-[state=active]:text-[var(--madhacks-dark-blue)] data-[state=active]:font-semibold transition-colors"
             >
               My Profiles
             </Tabs.Trigger>
             <Tabs.Trigger
               value="explore"
+              data-dwell-target="true"
               className="cursor-pointer px-1 pb-2 border-b-2 border-transparent text-gray-500 data-[state=active]:border-[var(--madhacks-teal)] data-[state=active]:text-[var(--madhacks-dark-blue)] data-[state=active]:font-semibold transition-colors"
             >
               Explore
             </Tabs.Trigger>
             <Tabs.Trigger
               value="record"
+              data-dwell-target="true"
               className="cursor-pointer px-1 pb-2 border-b-2 border-transparent text-gray-500 data-[state=active]:border-[var(--madhacks-teal)] data-[state=active]:text-[var(--madhacks-dark-blue)] data-[state=active]:font-semibold transition-colors"
             >
               Record
             </Tabs.Trigger>
             <Tabs.Trigger
               value="upload"
+              data-dwell-target="true"
               className="cursor-pointer px-1 pb-2 border-b-2 border-transparent text-gray-500 data-[state=active]:border-[var(--madhacks-teal)] data-[state=active]:text-[var(--madhacks-dark-blue)] data-[state=active]:font-semibold transition-colors"
             >
               Upload
@@ -130,10 +142,11 @@ export function ProfilesPanel({
                   <Card
                     padding="sm"
                     className={clsx(
-                      "transition-all duration-200 cursor-pointer hover:bg-gray-50",
+                      "transition-all duration-200 cursor-pointer",
                       activeProfileId === null && selectedVoiceId === defaultVoiceId && "bg-blue-100 border-blue-300 shadow-md ring-2 ring-blue-300"
                     )}
                     noShadow={activeProfileId !== null || selectedVoiceId !== defaultVoiceId}
+                    data-dwell-target="true"
                     onClick={() => {
                       // Clear any active profile and select the default voice
                       onActivate(null);
@@ -142,16 +155,20 @@ export function ProfilesPanel({
                   >
                     <Flex direction="column" gap="2">
                       <Flex justify="between" align="center">
-                        <Text size="3" weight="bold" className={activeProfileId === null && selectedVoiceId === defaultVoiceId ? "text-blue-800" : "text-gray-900"}>
-                          {defaultVoiceName}
-                        </Text>
+                        <Flex align="center" gap="2">
+                          {activeProfileId === null && selectedVoiceId === defaultVoiceId && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-blue-600">
+                              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                          <Text size="3" weight="bold" className={activeProfileId === null && selectedVoiceId === defaultVoiceId ? "text-blue-800" : "text-gray-900"}>
+                            {defaultVoiceName}
+                          </Text>
+                        </Flex>
                         <Badge color="blue" variant="soft" radius="full" className="bg-blue-100 text-blue-700">
                           Default
                         </Badge>
                       </Flex>
-                      <Text size="1" color="gray" className="font-mono opacity-70 truncate">
-                        ID: {defaultVoiceId.slice(0, 8)}...
-                      </Text>
                     </Flex>
                   </Card>
                 )}
@@ -175,14 +192,22 @@ export function ProfilesPanel({
                           isActive && "bg-blue-100 border-blue-300 shadow-md ring-2 ring-blue-300"
                         )}
                         noShadow={!isActive}
+                        data-dwell-target="true"
                         onClick={() => onActivate(profile.id)}
                       >
                         <Flex direction="row" justify="between" align="center" gap="3">
                           <Flex direction="column" gap="1" className="flex-1 min-w-0">
                             <Flex justify="between" align="center" gap="2">
-                              <Text size="3" weight="bold" className={clsx("truncate", isActive ? "text-blue-800" : "text-gray-900")}>
-                                {profile.name}
-                              </Text>
+                              <Flex align="center" gap="2">
+                                {isActive && (
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-blue-600 flex-shrink-0">
+                                    <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                )}
+                                <Text size="3" weight="bold" className={clsx("truncate", isActive ? "text-blue-800" : "text-gray-900")}>
+                                  {profile.name}
+                                </Text>
+                              </Flex>
                             </Flex>
                             <Flex gap="2" align="center">
                               <Badge color="gray" variant="soft" radius="full" className="bg-gray-100 text-gray-600 text-xs">
@@ -198,6 +223,7 @@ export function ProfilesPanel({
                               e.stopPropagation();
                               setDeleteTarget(profile);
                             }}
+                            data-dwell-target="true"
                             className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600 hover:text-red-700"
                             aria-label="Delete profile"
                           >
@@ -246,6 +272,7 @@ export function ProfilesPanel({
                     padding="md"
                     className="hover:border-gray-300 hover:shadow-sm transition-all duration-200"
                     noShadow
+                    data-dwell-target="true"
                   >
                     <Flex direction="column" gap="3">
                       <div>
@@ -263,6 +290,7 @@ export function ProfilesPanel({
                           onSelectVoice({ id: voice.id, name: voice.title ?? "Fish Voice" });
                           onSaveFromVoice(voice);
                         }}
+                        data-dwell-target="true"
                         variant="primary"
                         size="sm"
                         className="w-full"
@@ -293,15 +321,17 @@ export function ProfilesPanel({
                 
                 <Flex gap="3" align="center" justify="center" className="py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                   {recordingState === "idle" ? (
-                    <button 
-                      onClick={startRecording} 
+                    <button
+                      onClick={startRecording}
+                      data-dwell-target="true"
                       className="h-16 w-16 rounded-full bg-red-500 hover:bg-red-600 shadow-lg transition-transform active:scale-95 flex items-center justify-center text-white"
                     >
                       <div className="h-6 w-6 rounded-full bg-white opacity-90" />
                     </button>
                   ) : (
-                    <button 
-                      onClick={stopRecording} 
+                    <button
+                      onClick={stopRecording}
+                      data-dwell-target="true"
                       className="h-16 w-16 rounded-full bg-gray-800 hover:bg-gray-900 shadow-lg transition-transform active:scale-95 flex items-center justify-center animate-pulse"
                     >
                       <div className="h-6 w-6 rounded bg-white opacity-90" />
@@ -313,8 +343,8 @@ export function ProfilesPanel({
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-full max-w-xs">
                       <div className="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-                        <div 
-                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out" 
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out"
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -334,11 +364,6 @@ export function ProfilesPanel({
                     ) : (
                       "Tap red button to start recording a sample."
                     )}
-                  </Text>
-                )}
-                {recordingState === "idle" && !profileName.trim() && (
-                  <Text align="center" color="orange" size="2" className="text-orange-600">
-                    Please enter a name for your voice profile
                   </Text>
                 )}
               </Flex>
@@ -361,7 +386,7 @@ export function ProfilesPanel({
                   onChange={(e) => onProfileNameChange(e.target.value)}
                   size="3"
                 />
-                <div className="p-8 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50 text-center hover:bg-gray-100 transition-colors cursor-pointer relative group">
+                <div className="p-8 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50 text-center hover:bg-gray-100 transition-colors cursor-pointer relative group" data-dwell-target="true">
                   <input
                     type="file"
                     accept="audio/*"
@@ -394,8 +419,8 @@ export function ProfilesPanel({
                   <div className="space-y-3">
                     <div className="w-full">
                       <div className="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-                        <div 
-                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out" 
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out"
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -403,7 +428,7 @@ export function ProfilesPanel({
                         {Math.round(uploadProgress)}%
                       </Text>
                     </div>
-                    <Button 
+                    <Button
                       disabled
                       variant="primary"
                       size="lg"
@@ -417,28 +442,17 @@ export function ProfilesPanel({
                     </Button>
                   </div>
                 ) : (
-                  <>
-                    {!profileName.trim() && (
-                      <Text align="center" color="orange" size="2" className="text-orange-600 -mt-2">
-                        Please enter a name for your voice profile
-                      </Text>
-                    )}
-                    {!uploadFile && profileName.trim() && (
-                      <Text align="center" color="orange" size="2" className="text-orange-600 -mt-2">
-                        Please select an audio file to upload
-                      </Text>
-                    )}
-                    <Button 
-                      onClick={onUploadProfile} 
-                      disabled={!profileName.trim() || !uploadFile || recordingState === 'processing'}
-                      variant="primary"
-                      size="lg"
-                      fullWidth
-                      className="justify-center"
-                    >
-                      Upload & Create Voice
-                    </Button>
-                  </>
+                  <Button
+                    onClick={onUploadProfile}
+                    disabled={recordingState === 'processing'}
+                    data-dwell-target="true"
+                    variant="primary"
+                    size="lg"
+                    fullWidth
+                    className="justify-center"
+                  >
+                    Upload & Create Voice
+                  </Button>
                 )}
               </Flex>
             </Card>
@@ -475,12 +489,14 @@ export function ProfilesPanel({
               <Flex gap="3" justify="end">
                 <Button
                   variant="ghost"
+                  data-dwell-target="true"
                   onClick={() => setDeleteTarget(null)}
                 >
                   Cancel
                 </Button>
                 <Button
                   variant="danger"
+                  data-dwell-target="true"
                   onClick={() => {
                     onRemove(deleteTarget.id);
                     setDeleteTarget(null);

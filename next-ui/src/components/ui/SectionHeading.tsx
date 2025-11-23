@@ -28,19 +28,19 @@ export function SectionHeading({
   const headingClass = "heading-font text-gray-900 font-semibold uppercase tracking-[0.12em]";
 
   return (
-    <div className={clsx(variant === 'compact' && 'mb-4', className)} {...props}>
+    <div className={clsx('flex items-center', className)} {...props}>
       {variant === 'compact' ? (
-        <Heading 
-          size={headingSize as any} 
-          className={clsx(headingClass, 'text-xs')}
+        <Heading
+          size={headingSize as any}
+          className={clsx(headingClass, 'text-xs leading-none')}
         >
           {title}
         </Heading>
       ) : (
         <>
-          <Heading 
-            size={headingSize as any} 
-            className={clsx(headingClass, 'mb-1')}
+          <Heading
+            size={headingSize as any}
+            className={clsx(headingClass, 'leading-none')}
           >
             {title}
           </Heading>

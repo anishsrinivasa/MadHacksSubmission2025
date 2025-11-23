@@ -214,6 +214,7 @@ export default function App() {
   const cameraDragRef = useRef<HTMLDivElement>(null);
   const faceApiRef = useRef<typeof import('face-api.js') | null>(null);
   const mediapipeRef = useRef<MediaPipeResources | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (mounted && typeof window !== 'undefined') {
@@ -523,22 +524,22 @@ export default function App() {
       }
 
       // Only change emotion if it exceeds threshold OR if recent emotions strongly agree
-      const EMOTION_THRESHOLD = 0.5; // 50% of frames must agree (2 out of 4 frames)
+      const EMOTION_THRESHOLD = 0.20; // 20% of frames must agree (extremely sensitive)
       const agreementRatio = maxCount / emotionBufferRef.current.length;
-      const recentAgreement = emotionBufferRef.current.length >= 3 ? 
+      const recentAgreement = emotionBufferRef.current.length >= 3 ?
         (emotionBufferRef.current.slice(-3).filter(e => e === recentStabilizedEmotion).length / 3) : 0;
-      
+
       const shouldChange = (agreementRatio >= EMOTION_THRESHOLD && stabilizedEmotion !== currentEmotionRef.current) ||
-                          (recentAgreement >= 0.67 && recentStabilizedEmotion !== currentEmotionRef.current && recentStabilizedEmotion !== 'neutral');
-      
+                          (recentAgreement >= 0.40 && recentStabilizedEmotion !== currentEmotionRef.current && recentStabilizedEmotion !== 'neutral');
+
       if (shouldChange) {
-        const newEmotion = recentAgreement >= 0.67 ? recentStabilizedEmotion : stabilizedEmotion;
+        const newEmotion = recentAgreement >= 0.40 ? recentStabilizedEmotion : stabilizedEmotion;
         console.log(`[updateEmotion] Emotion changed: ${currentEmotionRef.current} → ${newEmotion} (Overall: ${Math.round(agreementRatio * 100)}%, Recent: ${Math.round(recentAgreement * 100)}% agreement)`);
         currentEmotionRef.current = newEmotion;
         setEmotion(newEmotion);
-        
-        // Lock emotion for 2 seconds to prevent rapid changes
-        emotionLockRef.current = now + 2000;
+
+        // Lock emotion for 0.3 second to prevent rapid changes (reduced for maximum responsiveness)
+        emotionLockRef.current = now + 300;
       }
 
       // Update confidence
@@ -647,7 +648,7 @@ export default function App() {
         sad: expressions.sad || 0,
         neutral: expressions.neutral || 0,
         surprised: expressions.surprised || 0,
-        angry: (expressions.angry || 0) + (expressions.disgusted || 0), // Combine angry and disgusted
+        angry: (expressions.angry || 0) + (expressions.disgusted || 0) + (expressions.fearful || 0) * 0.8, // Combine angry, disgusted, and most fearful
       };
       
       // Debug logging - log every time to see what's happening
@@ -660,10 +661,10 @@ export default function App() {
         rawExpressions: expressions
       });
       
-      // Improved emotion detection - more accurate thresholds
-      const MIN_THRESHOLD = 0.15; // Minimum confidence to consider an emotion (15%)
-      const NEUTRAL_DOMINANCE_THRESHOLD = 0.6; // If neutral is >60%, it's likely dominant
-      const EMOTION_OVERRIDE_DIFF = 0.2; // Non-neutral needs to be within 20% of neutral to override
+      // Improved emotion detection - extremely sensitive thresholds for maximum reactivity
+      const MIN_THRESHOLD = 0.03; // Minimum confidence to consider an emotion (3%)
+      const NEUTRAL_DOMINANCE_THRESHOLD = 0.20; // If neutral is >20%, it's likely dominant
+      const EMOTION_OVERRIDE_DIFF = 0.65; // Non-neutral needs to be within 65% of neutral to override
       
       let maxEmotion: Emotion = 'neutral';
       let maxConfidence = emotionMap.neutral;
@@ -939,12 +940,34 @@ export default function App() {
     };
   }, [activeProfile, activeProfileId, selectedVoice]);
 
+  const handleStopSpeech = useCallback(() => {
+    // Stop audio playback
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch (e) {
+        // Ignore pause errors
+      }
+      currentAudioRef.current = null;
+    }
+    // Stop Web Speech API
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setStatusMessage('Speech stopped.');
+  }, []);
+
   const handleSpeak = useCallback(async () => {
     if (speakCooldown) return;
     if (!text.trim()) {
       setStatusMessage('Type something before speaking.');
       return;
     }
+
+    // Stop any currently playing speech
+    handleStopSpeech();
+
     const { referenceId, name, userId } = resolveVoice();
     try {
       setSpeakCooldown(true);
@@ -978,30 +1001,35 @@ export default function App() {
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      currentAudioRef.current = audio;
       audio.onended = () => {
         URL.revokeObjectURL(url);
+        currentAudioRef.current = null;
         setStatusMessage('Speech complete.');
       };
-      await audio.play();
-      setStatusMessage(`Speaking via ${name} (${emotion}).`);
+      try {
+        await audio.play();
+        setStatusMessage(`Speaking via ${name} (${emotion}).`);
+      } catch (playError) {
+        // Handle play interruption
+        console.warn('Audio play interrupted:', playError);
+        URL.revokeObjectURL(url);
+        currentAudioRef.current = null;
+      }
     } catch (error) {
       console.error('Speech error', error);
       setStatusMessage(
-        'Fish Audio failed. Falling back to system speech synthesis.'
+        'Voice library unavailable. Falling back to system speech synthesis.'
       );
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(text);
         window.speechSynthesis.speak(utterance);
       }
     }
-  }, [text, emotion, resolveVoice, speakCooldown]);
+  }, [text, emotion, resolveVoice, speakCooldown, handleStopSpeech]);
 
   const handleKeyPress = useCallback(
     (value: string) => {
-      if (value === 'ENTER') {
-        void handleSpeak();
-        return;
-      }
       if (value === 'AUTOCOMPLETE') {
         if (!suggestion) return;
         setText((prev) => {
@@ -1025,7 +1053,7 @@ export default function App() {
       }
       setText((prev) => prev + value);
     },
-    [suggestion, handleSpeak]
+    [suggestion]
   );
 
   useEffect(() => {
@@ -1043,12 +1071,6 @@ export default function App() {
       }
 
       if (event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        handleKeyPress('ENTER');
         return;
       }
 
@@ -1312,9 +1334,9 @@ export default function App() {
       if (!profilePrompt) return;
       saveProfile({
         id: `profile_${Date.now()}`,
-        name: name.trim() || profilePrompt.title || 'Fish Audio Voice',
+        name: name.trim() || profilePrompt.title || 'Library Voice',
         voiceId: profilePrompt.id,
-        source: 'fish',
+        source: 'library',
         createdAt: new Date().toISOString(),
         tags: Array.isArray(profilePrompt.tags)
           ? profilePrompt.tags
@@ -1367,16 +1389,36 @@ export default function App() {
           )}`,
           { signal: controller.signal }
         );
+
+        if (!response.ok) {
+          console.warn('Voice search API returned error:', response.status);
+          setVoiceResults([]);
+          return;
+        }
+
         const data = await response.json();
         if (data.items) {
           setVoiceResults(data.items);
         } else if (Array.isArray(data)) {
           setVoiceResults(data);
+        } else {
+          setVoiceResults([]);
         }
       } catch (error) {
-        if (!(error instanceof DOMException)) {
-          console.error('Voice search error', error);
+        // Silently handle network errors when proxy server is down
+        if (error instanceof DOMException) {
+          // Aborted request, ignore
+          return;
         }
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          // Network error (server not running), silently fail
+          console.warn('Voice search unavailable: proxy server not running');
+          setVoiceResults([]);
+          return;
+        }
+        // Log other unexpected errors
+        console.warn('Voice search error:', error);
+        setVoiceResults([]);
       } finally {
         setVoiceLoading(false);
       }
@@ -1683,27 +1725,56 @@ export default function App() {
                       emotionConfidence={emotionConfidence}
                       isTracking={isTracking}
                     />
-                  
-                    <div className="flex flex-col gap-2.5">
+
                     <UIButton
                       onClick={isTracking ? stopCamera : startCamera}
-                      data-dwell-target="true"
+                      data-dwell-target={modelsStatus !== 'loading' ? "true" : undefined}
                       variant={isTracking ? "danger" : "primary"}
-                      size="md"
+                      size="xl"
                       fullWidth
+                      disabled={modelsStatus === 'loading'}
+                      className="dwell-key relative overflow-hidden data-[dwell-active=true]:scale-105 data-[dwell-active=true]:shadow-lg"
+                      style={{
+                        ["--dwell-duration" as any]: `${DWELL_SELECT_MS}ms`
+                      }}
                     >
-                      {isTracking ? "Stop Camera" : "Start Camera"}
-                    </UIButton>
-                    <UIButton
-                      onClick={() => handleKeyPress('ENTER')}
-                      data-dwell-target="true"
-                      variant="primary"
-                      size="md"
-                      fullWidth
-                    >
-                      Speak
+                      {modelsStatus === 'loading'
+                        ? "Loading models..."
+                        : isTracking
+                        ? "Stop Camera"
+                        : "Start Camera"}
                     </UIButton>
                   </div>
+                </Card>
+
+                <Card padding="md">
+                  <div className="flex flex-col gap-3">
+                    <UIButton
+                      onClick={handleSpeak}
+                      data-dwell-target="true"
+                      variant="success"
+                      size="xl"
+                      fullWidth
+                      className="dwell-key relative overflow-hidden data-[dwell-active=true]:bg-green-100 data-[dwell-active=true]:scale-105 data-[dwell-active=true]:shadow-lg"
+                      style={{
+                        ["--dwell-duration" as any]: `${DWELL_SELECT_MS}ms`
+                      }}
+                    >
+                      SPEAK
+                    </UIButton>
+                    <UIButton
+                      onClick={handleStopSpeech}
+                      data-dwell-target="true"
+                      variant="danger"
+                      size="xl"
+                      fullWidth
+                      className="dwell-key relative overflow-hidden data-[dwell-active=true]:bg-red-100 data-[dwell-active=true]:scale-105 data-[dwell-active=true]:shadow-lg"
+                      style={{
+                        ["--dwell-duration" as any]: `${DWELL_SELECT_MS}ms`
+                      }}
+                    >
+                      STOP
+                    </UIButton>
                   </div>
                 </Card>
               </div>
@@ -1784,6 +1855,7 @@ export default function App() {
                   variant="ghost"
                   onClick={() => setProfilePrompt(null)}
                   size="md"
+                  data-dwell-target="true"
                 >
                   Cancel
                 </UIButton>
@@ -1793,6 +1865,7 @@ export default function App() {
                   }
                   variant="primary"
                   size="md"
+                  data-dwell-target="true"
                 >
                   Save Profile
                 </UIButton>
