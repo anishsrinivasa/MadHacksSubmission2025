@@ -91,7 +91,7 @@ const PUNCTUATION_ROW: KeyboardKey[] = [
 
 const ACTION_ROW: KeyboardKey[] = [
   { label: 'CLEAR', value: 'CLEAR', variant: 'ghost' },
-  { label: '✓ Autocomplete', value: 'AUTOCOMPLETE', variant: 'action' },
+  { label: 'Autocomplete', value: 'AUTOCOMPLETE', variant: 'action' },
   { label: 'SPACE', value: ' ', wide: true },
 ];
 
@@ -133,6 +133,8 @@ export default function App() {
   const hoveredElementRef = useRef<HTMLElement | null>(null);
   const dwellTimerRef = useRef<number | null>(null);
   const dwellRepeatRef = useRef<number | null>(null);
+  const candidateElementRef = useRef<HTMLElement | null>(null); // For hysteresis
+  const candidateTimerRef = useRef<number | null>(null);
   const emotionBufferRef = useRef<Emotion[]>([]);
   const emotionLockRef = useRef<number>(0);
   const emotionBusyRef = useRef(false);
@@ -193,6 +195,8 @@ export default function App() {
   const [recordingState, setRecordingState] = useState<
     'idle' | 'recording' | 'processing'
   >('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const progressIntervalRef = useRef<number | null>(null);
   const [recordedMs, setRecordedMs] = useState(0);
   const recordingIntervalRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -656,78 +660,44 @@ export default function App() {
         rawExpressions: expressions
       });
       
-      // AGGRESSIVE emotion detection logic (from original code)
-      // face-api.js often under-detects sad and angry, so we need to be very lenient
-      const SAD_MIN_THRESHOLD = 0.08; // Very low threshold for sad (8% - very sensitive)
-      const ANGRY_MIN_THRESHOLD = 0.10; // Low threshold for angry (10%)
-      const OTHER_NON_NEUTRAL_MIN_THRESHOLD = 0.25; // Threshold for other emotions
+      // Improved emotion detection - more accurate thresholds
+      const MIN_THRESHOLD = 0.15; // Minimum confidence to consider an emotion (15%)
+      const NEUTRAL_DOMINANCE_THRESHOLD = 0.6; // If neutral is >60%, it's likely dominant
+      const EMOTION_OVERRIDE_DIFF = 0.2; // Non-neutral needs to be within 20% of neutral to override
       
       let maxEmotion: Emotion = 'neutral';
       let maxConfidence = emotionMap.neutral;
       
-      // VERY AGGRESSIVE handling for sad: prioritize it heavily
-      if (emotionMap.sad >= SAD_MIN_THRESHOLD) {
-        // If sad is within 0.35 of neutral (very lenient), prefer sad
-        if (emotionMap.sad >= emotionMap.neutral - 0.35) {
-          maxEmotion = 'sad';
-          maxConfidence = emotionMap.sad;
-          console.log(`[detectEmotion] ✅ Prioritizing SAD (${emotionMap.sad.toFixed(2)}) over neutral (${emotionMap.neutral.toFixed(2)})`);
-        } else if (emotionMap.neutral < 0.7 && emotionMap.sad > 0.1) {
-          maxEmotion = 'sad';
-          maxConfidence = emotionMap.sad;
-          console.log(`[detectEmotion] ✅ Choosing SAD (${emotionMap.sad.toFixed(2)}) - neutral not dominant (${emotionMap.neutral.toFixed(2)})`);
+      // Find the highest non-neutral emotion
+      const emotions: Emotion[] = ['happy', 'sad', 'angry', 'surprised'];
+      let bestNonNeutral: Emotion | null = null;
+      let bestNonNeutralConf = 0;
+      
+      for (const emo of emotions) {
+        if (emotionMap[emo] > bestNonNeutralConf) {
+          bestNonNeutralConf = emotionMap[emo];
+          bestNonNeutral = emo;
         }
       }
       
-      // AGGRESSIVE handling for angry: prioritize it if sad didn't win
-      if (emotionMap.angry >= ANGRY_MIN_THRESHOLD && maxEmotion === 'neutral') {
-        // If angry is within 0.30 of neutral, prefer angry
-        if (emotionMap.angry >= emotionMap.neutral - 0.30) {
-          maxEmotion = 'angry';
-          maxConfidence = emotionMap.angry;
-          console.log(`[detectEmotion] ✅ Prioritizing ANGRY (${emotionMap.angry.toFixed(2)}) over neutral (${emotionMap.neutral.toFixed(2)})`);
-        } else if (emotionMap.neutral < 0.7 && emotionMap.angry > 0.12) {
-          maxEmotion = 'angry';
-          maxConfidence = emotionMap.angry;
-          console.log(`[detectEmotion] ✅ Choosing ANGRY (${emotionMap.angry.toFixed(2)}) - neutral not dominant (${emotionMap.neutral.toFixed(2)})`);
+      // Only override neutral if:
+      // 1. Non-neutral emotion is above minimum threshold
+      // 2. Non-neutral is close enough to neutral (within override diff) OR neutral is not dominant
+      if (bestNonNeutral && bestNonNeutralConf >= MIN_THRESHOLD) {
+        const neutralDominant = emotionMap.neutral >= NEUTRAL_DOMINANCE_THRESHOLD;
+        const closeToNeutral = bestNonNeutralConf >= emotionMap.neutral - EMOTION_OVERRIDE_DIFF;
+        
+        if (!neutralDominant || closeToNeutral) {
+          maxEmotion = bestNonNeutral;
+          maxConfidence = bestNonNeutralConf;
         }
       }
       
-      // For other non-neutral emotions (happy, surprised), use standard logic
-      if (maxEmotion === 'neutral') {
-        let bestNonNeutral: Emotion | null = null;
-        let bestNonNeutralConf = 0;
-        
-        // Check happy and surprised
-        if (emotionMap.happy > bestNonNeutralConf) {
-          bestNonNeutralConf = emotionMap.happy;
-          bestNonNeutral = 'happy';
-        }
-        if (emotionMap.surprised > bestNonNeutralConf) {
-          bestNonNeutralConf = emotionMap.surprised;
-          bestNonNeutral = 'surprised';
-        }
-        
-        // If we have a non-neutral emotion above threshold, prefer it
-        if (bestNonNeutral && bestNonNeutralConf >= OTHER_NON_NEUTRAL_MIN_THRESHOLD) {
-          // If non-neutral is within 0.15 of neutral, prefer non-neutral
-          if (bestNonNeutralConf >= emotionMap.neutral - 0.15) {
-            maxEmotion = bestNonNeutral;
-            maxConfidence = bestNonNeutralConf;
-            if (Math.random() < 0.1) {
-              console.log(`[detectEmotion] Prioritizing non-neutral emotion: ${bestNonNeutral} (${bestNonNeutralConf.toFixed(2)}) over neutral (${emotionMap.neutral.toFixed(2)})`);
-            }
-          }
-        }
-        
-        // Fallback: if no special case matched, use the emotion with highest confidence
-        if (maxEmotion === 'neutral') {
-          for (const [emotion, confidence] of Object.entries(emotionMap) as Array<[Emotion, number]>) {
-            if (confidence > maxConfidence) {
-              maxConfidence = confidence;
-              maxEmotion = emotion;
-            }
-          }
+      // Final fallback: use highest confidence emotion
+      for (const [emotion, confidence] of Object.entries(emotionMap) as Array<[Emotion, number]>) {
+        if (confidence > maxConfidence) {
+          maxConfidence = confidence;
+          maxEmotion = emotion;
         }
       }
       
@@ -954,19 +924,20 @@ export default function App() {
     : `${selectedVoice.name} (quick voice)`;
 
   const resolveVoice = useCallback(() => {
-    if (activeProfile?.voiceId) {
+    if (activeProfileId && activeProfile?.voiceId) {
       return {
         referenceId: activeProfile.voiceId,
         name: activeProfile.name,
         userId: activeProfile.id,
       };
     }
+    // Use default voice when activeProfileId is null
     return {
       referenceId: selectedVoice.id,
       name: selectedVoice.name,
       userId: FALLBACK_PROFILE_ID,
     };
-  }, [activeProfile, selectedVoice]);
+  }, [activeProfile, activeProfileId, selectedVoice]);
 
   const handleSpeak = useCallback(async () => {
     if (speakCooldown) return;
@@ -1155,7 +1126,20 @@ export default function App() {
         try {
           setRecordingState('processing');
           setUploadStatus('Creating voice model...');
+          setUploadProgress(0);
+          
+          // Start progress simulation
+          progressIntervalRef.current = window.setInterval(() => {
+            setUploadProgress((prev) => {
+              if (prev >= 90) return 90; // Stop at 90% until done
+              return prev + Math.random() * 15 + 5; // Increment by 5-20%
+            });
+          }, 500);
+          
           const voiceId = await uploadVoiceAsset(blob, profileId);
+          setUploadProgress(100);
+          await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause at 100%
+          
           saveProfile({
             id: profileId,
             name: profileName.trim(),
@@ -1168,8 +1152,13 @@ export default function App() {
           console.error(error);
           setUploadStatus('Recording processing failed.');
         } finally {
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
           setRecordingState('idle');
           setRecordedMs(0);
+          setUploadProgress(0);
         }
       };
       mediaRecorderRef.current = recorder;
@@ -1212,8 +1201,22 @@ export default function App() {
     }
     try {
       setUploadStatus('Uploading audio and creating voice...');
+      setUploadProgress(0);
+      setRecordingState('processing');
       const profileId = `profile_${Date.now()}`;
+      
+      // Start progress simulation
+      progressIntervalRef.current = window.setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) return 90; // Stop at 90% until done
+          return prev + Math.random() * 15 + 5; // Increment by 5-20%
+        });
+      }, 500);
+      
       const voiceId = await uploadVoiceAsset(uploadFile, profileId);
+      setUploadProgress(100);
+      await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause at 100%
+      
       saveProfile({
         id: profileId,
         name: profileName.trim(),
@@ -1229,6 +1232,13 @@ export default function App() {
     } catch (error) {
       console.error(error);
       setUploadStatus('Upload failed. Please try another file.');
+    } finally {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setRecordingState('idle');
+      setUploadProgress(0);
     }
   }, [profileName, uploadFile, saveProfile, uploadVoiceAsset]);
 
@@ -1378,24 +1388,179 @@ export default function App() {
         clearInterval(dwellRepeatRef.current);
         dwellRepeatRef.current = null;
       }
+      if (candidateTimerRef.current) {
+        clearTimeout(candidateTimerRef.current);
+        candidateTimerRef.current = null;
+        candidateElementRef.current = null;
+      }
       return;
     }
+    // Get all eligible elements at cursor point, then select the one with center closest to cursor
     const targetElements: Element[] = document.elementsFromPoint(
       cursorPosition.x,
       cursorPosition.y
     );
-    const eligible = targetElements.find(
+    
+    // Filter all eligible elements (not just find first)
+    let eligibleElements = targetElements.filter(
       (el) =>
         el instanceof HTMLElement &&
         el.dataset.dwellTarget === 'true' &&
         el.getAttribute('aria-disabled') !== 'true' &&
         !(el as HTMLButtonElement).disabled
-    ) as HTMLElement | undefined;
+    ) as HTMLElement[];
+    
+    // Fallback: if no elements found at exact point, check all dwell targets to see if cursor is within bounds
+    // This handles cases where cursor might be slightly off due to jitter
+    // Add a small buffer zone (5px) for more reliable detection
+    const BUFFER_ZONE = 5;
+    if (eligibleElements.length === 0) {
+      const allDwellTargets = document.querySelectorAll('[data-dwell-target="true"]');
+      for (const el of allDwellTargets) {
+        if (
+          el instanceof HTMLElement &&
+          el.getAttribute('aria-disabled') !== 'true' &&
+          !(el as HTMLButtonElement).disabled
+        ) {
+          const rect = el.getBoundingClientRect();
+          if (
+            cursorPosition.x >= rect.left - BUFFER_ZONE &&
+            cursorPosition.x <= rect.right + BUFFER_ZONE &&
+            cursorPosition.y >= rect.top - BUFFER_ZONE &&
+            cursorPosition.y <= rect.bottom + BUFFER_ZONE
+          ) {
+            eligibleElements.push(el);
+          }
+        }
+      }
+    }
+    
+    // Find the element where at least 30-40% of cursor area overlaps with the key
+    // This ensures we only select keys that the cursor is truly focused on
+    let eligible: HTMLElement | undefined;
+    let bestOverlap = 0;
+    const MIN_OVERLAP_RATIO = 0.35; // Require at least 35% overlap (between 30-40%)
+    const CURSOR_SIZE = 20; // Approximate cursor radius in pixels
+    
+    for (const el of eligibleElements) {
+      const rect = el.getBoundingClientRect();
+      
+      // Calculate overlap area between cursor circle and element rectangle
+      const cursorLeft = cursorPosition.x - CURSOR_SIZE;
+      const cursorRight = cursorPosition.x + CURSOR_SIZE;
+      const cursorTop = cursorPosition.y - CURSOR_SIZE;
+      const cursorBottom = cursorPosition.y + CURSOR_SIZE;
+      
+      // Calculate intersection rectangle
+      const overlapLeft = Math.max(cursorLeft, rect.left);
+      const overlapRight = Math.min(cursorRight, rect.right);
+      const overlapTop = Math.max(cursorTop, rect.top);
+      const overlapBottom = Math.min(cursorBottom, rect.bottom);
+      
+      // If there's an overlap
+      if (overlapLeft < overlapRight && overlapTop < overlapBottom) {
+        const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+        const cursorArea = (CURSOR_SIZE * 2) * (CURSOR_SIZE * 2);
+        const overlapRatio = overlapArea / cursorArea;
+        
+        // Only consider elements with sufficient overlap
+        if (overlapRatio >= MIN_OVERLAP_RATIO && overlapRatio > bestOverlap) {
+          bestOverlap = overlapRatio;
+          eligible = el;
+        }
+      }
+    }
 
+    // HYSTERESIS: Don't switch immediately - wait to confirm cursor is stable on new element
+    // This prevents rapid switching due to jitter and makes selection SUPER reliable
+    const HYSTERESIS_MS = 70; // Wait 70ms (between 50-80ms) before switching to new element
+    
     if (eligible === hoveredElementRef.current) {
+      // Same element - clear any candidate timer
+      if (candidateTimerRef.current) {
+        clearTimeout(candidateTimerRef.current);
+        candidateTimerRef.current = null;
+        candidateElementRef.current = null;
+      }
       return;
     }
 
+    // If we have a candidate that's different from current, wait to confirm
+    if (eligible && eligible !== hoveredElementRef.current) {
+      // If this is a new candidate, start/restart the hysteresis timer
+      if (candidateElementRef.current !== eligible) {
+        // Clear existing candidate timer
+        if (candidateTimerRef.current) {
+          clearTimeout(candidateTimerRef.current);
+        }
+        
+        // Set new candidate
+        candidateElementRef.current = eligible;
+        
+        // Wait before actually switching
+        candidateTimerRef.current = window.setTimeout(() => {
+          // Only switch if candidate is still valid
+          if (candidateElementRef.current === eligible && isTrackingRef.current) {
+            // Clear previous hover
+            if (hoveredElementRef.current) {
+              hoveredElementRef.current.dataset.dwellActive = 'false';
+            }
+            if (dwellTimerRef.current) {
+              clearTimeout(dwellTimerRef.current);
+              dwellTimerRef.current = null;
+            }
+            if (dwellRepeatRef.current) {
+              clearInterval(dwellRepeatRef.current);
+              dwellRepeatRef.current = null;
+            }
+            
+            // Set new hover
+            hoveredElementRef.current = eligible;
+            eligible.dataset.dwellActive = 'true';
+            dwellTimerRef.current = window.setTimeout(() => {
+              eligible.dataset.dwellSelected = 'true';
+              eligible.click();
+              setTimeout(() => {
+                eligible.dataset.dwellSelected = 'false';
+              }, 250);
+              // After the first selection, start auto-repeat while the nose stays on this key.
+              const REPEAT_MS = 900;
+              if (dwellRepeatRef.current) {
+                clearInterval(dwellRepeatRef.current);
+              }
+              dwellRepeatRef.current = window.setInterval(() => {
+                if (
+                  hoveredElementRef.current === eligible &&
+                  isTrackingRef.current
+                ) {
+                  eligible.dataset.dwellSelected = 'true';
+                  eligible.click();
+                  window.setTimeout(() => {
+                    eligible.dataset.dwellSelected = 'false';
+                  }, 180);
+                } else {
+                  if (dwellRepeatRef.current) {
+                    clearInterval(dwellRepeatRef.current);
+                    dwellRepeatRef.current = null;
+                  }
+                }
+              }, REPEAT_MS);
+            }, DWELL_SELECT_MS);
+            
+            candidateElementRef.current = null;
+            candidateTimerRef.current = null;
+          }
+        }, HYSTERESIS_MS);
+      }
+      return; // Wait for hysteresis timer
+    }
+
+    // No eligible element found - clear everything
+    if (candidateTimerRef.current) {
+      clearTimeout(candidateTimerRef.current);
+      candidateTimerRef.current = null;
+      candidateElementRef.current = null;
+    }
     if (hoveredElementRef.current) {
       hoveredElementRef.current.dataset.dwellActive = 'false';
       hoveredElementRef.current = null;
@@ -1407,41 +1572,6 @@ export default function App() {
     if (dwellRepeatRef.current) {
       clearInterval(dwellRepeatRef.current);
       dwellRepeatRef.current = null;
-    }
-
-    if (eligible) {
-      hoveredElementRef.current = eligible;
-      eligible.dataset.dwellActive = 'true';
-      dwellTimerRef.current = window.setTimeout(() => {
-        eligible.dataset.dwellSelected = 'true';
-        eligible.click();
-        setTimeout(() => {
-          eligible.dataset.dwellSelected = 'false';
-        }, 250);
-        // After the first selection, start auto-repeat while the nose stays on this key.
-        // Increase this delay so characters don't rapid-fire when the nose stays still.
-        const REPEAT_MS = 900;
-        if (dwellRepeatRef.current) {
-          clearInterval(dwellRepeatRef.current);
-        }
-        dwellRepeatRef.current = window.setInterval(() => {
-          if (
-            hoveredElementRef.current === eligible &&
-            isTrackingRef.current
-          ) {
-            eligible.dataset.dwellSelected = 'true';
-            eligible.click();
-            window.setTimeout(() => {
-              eligible.dataset.dwellSelected = 'false';
-            }, 180);
-          } else {
-            if (dwellRepeatRef.current) {
-              clearInterval(dwellRepeatRef.current);
-              dwellRepeatRef.current = null;
-            }
-          }
-        }, REPEAT_MS);
-      }, DWELL_SELECT_MS);
     }
   }, [cursorPosition, isTracking]);
 
@@ -1506,7 +1636,7 @@ export default function App() {
         <div className="flex min-h-0 flex-1 gap-6 p-6 bg-gray-50">
           {/* LEFT: Keyboard, Text, and Camera */}
           <div className="flex min-w-0 flex-1 flex-col gap-6">
-            <div className="flex flex-row gap-6 items-stretch">
+            <div className="flex flex-row gap-3 items-stretch">
               <div className="flex-1">
                 <TextComposer text={text} suggestion={suggestion} onClear={() => setText('')} />
               </div>
@@ -1520,7 +1650,7 @@ export default function App() {
                 />
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 gap-6">
+            <div className="flex min-h-0 flex-1 gap-3">
               <div className="flex-1 min-h-0 flex flex-col">
                 <VirtualKeyboard
                   layout={KEYBOARD_LAYOUT}
@@ -1528,7 +1658,7 @@ export default function App() {
                   suggestionAvailable={Boolean(suggestion)}
                 />
               </div>
-              <div className="w-64 flex-shrink-0 flex flex-col gap-4">
+              <div className="w-64 flex-shrink-0 flex flex-col gap-3">
                 <Card padding="md">
                   <div className="flex flex-col gap-3">
                     <CameraPanel
@@ -1590,6 +1720,7 @@ export default function App() {
               stopRecording={stopRecording}
               recordingState={recordingState}
               recordedMs={recordedMs}
+              uploadProgress={uploadProgress}
               onFileChange={setUploadFile}
               uploadFile={uploadFile}
               voiceQuery={voiceQuery}
@@ -1598,6 +1729,8 @@ export default function App() {
               voiceLoading={voiceLoading}
               selectedVoiceId={selectedVoice.id}
               onSelectVoice={(voice) => setSelectedVoice(voice)}
+              defaultVoiceId={DEFAULT_VOICE_REFERENCES.male.id}
+              defaultVoiceName={DEFAULT_VOICE_REFERENCES.male.name}
             />
           </div>
         </div>

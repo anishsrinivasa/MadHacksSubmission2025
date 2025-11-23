@@ -47,8 +47,8 @@ export function TextComposer({ text, suggestion, onClear }: TextComposerProps) {
       padding="md"
       className="h-full flex flex-col gap-3"
     >
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 min-h-[110px] w-full rounded-[20px] border border-gray-200 bg-white shadow-[0_10px_25px_rgba(15,23,42,0.05)] px-5 py-4">
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 max-h-full w-full rounded-[20px] border border-gray-200 bg-white shadow-[0_10px_25px_rgba(15,23,42,0.05)] px-5 py-4 overflow-hidden">
           <div className="h-full overflow-y-auto leading-relaxed">
             {text.length === 0 ? (
               <Text size="4" color="gray" className="select-none opacity-50">

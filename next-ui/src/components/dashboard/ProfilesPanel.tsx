@@ -30,6 +30,7 @@ type ProfilesPanelProps = {
   stopRecording: () => void;
   recordingState: "idle" | "recording" | "processing";
   recordedMs: number;
+  uploadProgress: number;
   onFileChange: (file: File | null) => void;
   uploadFile: File | null;
   voiceQuery: string;
@@ -38,6 +39,8 @@ type ProfilesPanelProps = {
   voiceLoading: boolean;
   selectedVoiceId: string;
   onSelectVoice: (voice: { id: string; name: string }) => void;
+  defaultVoiceId: string;
+  defaultVoiceName: string;
 };
 
 export function ProfilesPanel({
@@ -62,6 +65,7 @@ export function ProfilesPanel({
   stopRecording,
   recordingState,
   recordedMs,
+  uploadProgress,
   onFileChange,
   uploadFile,
   voiceQuery,
@@ -70,6 +74,8 @@ export function ProfilesPanel({
   voiceLoading,
   selectedVoiceId,
   onSelectVoice,
+  defaultVoiceId,
+  defaultVoiceName,
 }: ProfilesPanelProps) {
   const [deleteTarget, setDeleteTarget] = useState<VoiceProfile | null>(null);
   return (
@@ -118,7 +124,37 @@ export function ProfilesPanel({
           <Tabs.Content value="profiles" className="h-full flex flex-col overflow-hidden">
             <div className="flex-1 min-h-0">
               <ScrollArea scrollbars="vertical" className="h-full">
-                <div className="p-6 space-y-4 pb-8">
+                <div className="p-3 space-y-3 pb-4">
+                {/* Default American Voice Option */}
+                {mounted && (
+                  <Card
+                    padding="sm"
+                    className={clsx(
+                      "transition-all duration-200 cursor-pointer hover:bg-gray-50",
+                      activeProfileId === null && selectedVoiceId === defaultVoiceId && "bg-blue-100 border-blue-300 shadow-md ring-2 ring-blue-300"
+                    )}
+                    noShadow={activeProfileId !== null || selectedVoiceId !== defaultVoiceId}
+                    onClick={() => {
+                      // Clear any active profile and select the default voice
+                      onActivate(null);
+                      onSelectVoice({ id: defaultVoiceId, name: defaultVoiceName });
+                    }}
+                  >
+                    <Flex direction="column" gap="2">
+                      <Flex justify="between" align="center">
+                        <Text size="3" weight="bold" className={activeProfileId === null && selectedVoiceId === defaultVoiceId ? "text-blue-800" : "text-gray-900"}>
+                          {defaultVoiceName}
+                        </Text>
+                        <Badge color="blue" variant="soft" radius="full" className="bg-blue-100 text-blue-700">
+                          Default
+                        </Badge>
+                      </Flex>
+                      <Text size="1" color="gray" className="font-mono opacity-70 truncate">
+                        ID: {defaultVoiceId.slice(0, 8)}...
+                      </Text>
+                    </Flex>
+                  </Card>
+                )}
                 {!mounted ? (
                   <Text color="gray" size="2">Loading profiles…</Text>
                 ) : profiles.length === 0 ? (
@@ -133,62 +169,46 @@ export function ProfilesPanel({
                     return (
                       <Card
                         key={profile.id}
-                        padding="md"
+                        padding="sm"
                         className={clsx(
-                          "transition-all duration-200",
-                          isActive && "bg-[var(--brand-blue-light)] border-[var(--brand-blue-border)] shadow-sm ring-1 ring-[var(--brand-blue-border)]"
+                          "transition-all duration-200 cursor-pointer",
+                          isActive && "bg-blue-100 border-blue-300 shadow-md ring-2 ring-blue-300"
                         )}
                         noShadow={!isActive}
+                        onClick={() => onActivate(profile.id)}
                       >
-                        <Flex direction="column" gap="3">
-                          <div>
-                            <Flex justify="between" align="center">
-                              <Text size="3" weight="bold" className={isActive ? "text-[var(--brand-blue-active)]" : "text-gray-900"}>
+                        <Flex direction="row" justify="between" align="center" gap="3">
+                          <Flex direction="column" gap="1" className="flex-1 min-w-0">
+                            <Flex justify="between" align="center" gap="2">
+                              <Text size="3" weight="bold" className={clsx("truncate", isActive ? "text-blue-800" : "text-gray-900")}>
                                 {profile.name}
                               </Text>
-                              {isActive && <Badge color="blue" variant="surface">Active</Badge>}
                             </Flex>
-                            <Text size="1" color="gray" className="mt-1 block font-mono opacity-70 truncate">
-                              ID: {profile.voiceId?.slice(0, 8)}...
-                            </Text>
-                            <Flex gap="2" mt="2">
-                              <Badge color="gray" variant="soft" radius="full" className="bg-gray-100 text-gray-600">
+                            <Flex gap="2" align="center">
+                              <Badge color="gray" variant="soft" radius="full" className="bg-gray-100 text-gray-600 text-xs">
                                 {profile.source}
                               </Badge>
-                              <Text size="1" color="gray" className="self-center">
+                              <Text size="1" color="gray" className="whitespace-nowrap">
                                 {new Date(profile.createdAt).toLocaleDateString()}
                               </Text>
                             </Flex>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
-                            <Button
-                              onClick={() => onActivate(profile.id)}
-                              variant={isActive ? "primary" : "secondary"}
-                              size="sm"
-                            >
-                              {isActive ? "Active" : "Use"}
-                            </Button>
-                            <Button
-                              onClick={() =>
-                                onSaveFromVoice({
-                                  id: profile.voiceId ?? "",
-                                  title: profile.name,
-                                })
-                              }
-                              variant="ghost"
-                              size="sm"
-                            >
-                              Details
-                            </Button>
-                            <Button
-                              onClick={() => setDeleteTarget(profile)}
-                              variant="danger"
-                              size="sm"
-                            >
-                              Remove
-                            </Button>
-                          </div>
+                          </Flex>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(profile);
+                            }}
+                            className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600 hover:text-red-700"
+                            aria-label="Delete profile"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18"></path>
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                          </button>
                         </Flex>
                       </Card>
                     );
@@ -201,7 +221,7 @@ export function ProfilesPanel({
 
           {/* Explore Tab */}
           <Tabs.Content value="explore" className="h-full flex flex-col overflow-hidden">
-            <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <div className="p-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
               <TextField.Root
                 value={voiceQuery}
                 onChange={(event) => onVoiceQueryChange(event.target.value)}
@@ -215,7 +235,7 @@ export function ProfilesPanel({
 
             <div className="flex-1 min-h-0">
               <ScrollArea scrollbars="vertical" className="h-full">
-                <div className="p-4 space-y-3 pb-8">
+                <div className="p-3 space-y-3 pb-4">
                 {voiceLoading && <Text size="2" color="gray" className="p-4 text-center block">Searching voices...</Text>}
                 {!voiceLoading && voiceResults.length === 0 && voiceQuery && (
                   <Text size="2" color="gray" className="p-4 text-center block">No voices found.</Text>
@@ -238,24 +258,17 @@ export function ProfilesPanel({
                           </Flex>
                         )}
                       </div>
-                      <Flex gap="2">
-                        <Button
-                          onClick={() => onSelectVoice({ id: voice.id, name: voice.title ?? "Fish Voice" })}
-                          variant="primary"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          Use
-                        </Button>
-                        <Button
-                          onClick={() => onSaveFromVoice(voice)}
-                          variant="ghost"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          Save
-                        </Button>
-                      </Flex>
+                      <Button
+                        onClick={() => {
+                          onSelectVoice({ id: voice.id, name: voice.title ?? "Fish Voice" });
+                          onSaveFromVoice(voice);
+                        }}
+                        variant="primary"
+                        size="sm"
+                        className="w-full"
+                      >
+                        Save and Use
+                      </Button>
                     </Flex>
                   </Card>
                 ))}
@@ -268,7 +281,7 @@ export function ProfilesPanel({
           <Tabs.Content value="record" className="h-full flex flex-col overflow-hidden">
             <div className="flex-1 min-h-0">
               <ScrollArea scrollbars="vertical" className="h-full">
-                <div className="p-6 space-y-4 pb-8">
+                <div className="p-3 space-y-3 pb-4">
             <Card header={<SectionHeading title="Record New Voice" />} padding="lg">
               <Flex direction="column" gap="4">
                 <TextField.Root
@@ -296,11 +309,38 @@ export function ProfilesPanel({
                   )}
                 </Flex>
                 
-                <Text align="center" color="gray" size="2">
-                  {recordingState === "recording" 
-                    ? `Recording... ${Math.floor(recordedMs / 1000)}s`
-                    : "Tap red button to start recording a sample."}
-                </Text>
+                {recordingState === "processing" ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-full max-w-xs">
+                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <Text align="center" size="1" color="gray" className="mt-1.5">
+                        {Math.round(uploadProgress)}%
+                      </Text>
+                    </div>
+                    <Text align="center" color="gray" size="2" className="flex items-center gap-2">
+                      <span className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+                      Creating voice model... Please wait
+                    </Text>
+                  </div>
+                ) : (
+                  <Text align="center" color="gray" size="2">
+                    {recordingState === "recording" ? (
+                      `Recording... ${Math.floor(recordedMs / 1000)}s`
+                    ) : (
+                      "Tap red button to start recording a sample."
+                    )}
+                  </Text>
+                )}
+                {recordingState === "idle" && !profileName.trim() && (
+                  <Text align="center" color="orange" size="2" className="text-orange-600">
+                    Please enter a name for your voice profile
+                  </Text>
+                )}
               </Flex>
             </Card>
                 </div>
@@ -312,7 +352,7 @@ export function ProfilesPanel({
           <Tabs.Content value="upload" className="h-full flex flex-col overflow-hidden">
             <div className="flex-1 min-h-0">
               <ScrollArea scrollbars="vertical" className="h-full">
-                <div className="p-6 space-y-4 pb-8">
+                <div className="p-3 space-y-3 pb-4">
              <Card header={<SectionHeading title="Upload Audio Sample" />} padding="lg">
               <Flex direction="column" gap="4">
                 <TextField.Root
@@ -350,16 +390,56 @@ export function ProfilesPanel({
                     </div>
                   )}
                 </div>
-                <Button 
-                  onClick={onUploadProfile} 
-                  disabled={!profileName.trim() || !uploadFile}
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  className="justify-center"
-                >
-                  Upload & Create Voice
-                </Button>
+                {uploadStatus && (uploadStatus.includes('Creating') || uploadStatus?.includes('Uploading')) ? (
+                  <div className="space-y-3">
+                    <div className="w-full">
+                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 via-blue-600 to-blue-500 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <Text align="center" size="1" color="gray" className="mt-1.5">
+                        {Math.round(uploadProgress)}%
+                      </Text>
+                    </div>
+                    <Button 
+                      disabled
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      className="justify-center"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        {uploadStatus}
+                      </span>
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    {!profileName.trim() && (
+                      <Text align="center" color="orange" size="2" className="text-orange-600 -mt-2">
+                        Please enter a name for your voice profile
+                      </Text>
+                    )}
+                    {!uploadFile && profileName.trim() && (
+                      <Text align="center" color="orange" size="2" className="text-orange-600 -mt-2">
+                        Please select an audio file to upload
+                      </Text>
+                    )}
+                    <Button 
+                      onClick={onUploadProfile} 
+                      disabled={!profileName.trim() || !uploadFile || recordingState === 'processing'}
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      className="justify-center"
+                    >
+                      Upload & Create Voice
+                    </Button>
+                  </>
+                )}
               </Flex>
             </Card>
                 </div>

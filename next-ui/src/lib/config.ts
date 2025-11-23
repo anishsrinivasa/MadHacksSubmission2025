@@ -29,8 +29,8 @@ export const DWELL_SELECT_MS = 500;
 
 export const NOSE_SENSITIVITY = {
   // Tuned to balance stability vs. required head movement.
-  // Lower values = less amplification of tiny detection noise (less “jumping”).
-  x: 3.6,
+  // Lower values = less amplification of tiny detection noise (less "jumping").
+  x: 4.1,
   y: 4.2,
 };
 

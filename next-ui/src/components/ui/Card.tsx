@@ -22,7 +22,7 @@ export function Card({
 }: CardProps) {
   const paddingClasses = {
     none: '',
-    sm: 'p-4',
+    sm: 'p-3',
     md: 'p-6',
     lg: 'p-8',
   };

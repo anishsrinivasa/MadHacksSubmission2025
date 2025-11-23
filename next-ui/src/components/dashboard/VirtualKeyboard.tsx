@@ -35,7 +35,7 @@ export function VirtualKeyboard({
       padding="none"
       className="h-full flex flex-col min-h-0"
     >
-      <div className="flex-1 flex flex-col gap-2.5 w-full p-4 min-h-0">
+      <div className="flex-1 flex flex-col gap-1.5 w-full p-2 min-h-0">
         {layout.map((row, rowIdx) => (
           <div
             key={`keyboard-row-${rowIdx}`}
@@ -55,7 +55,7 @@ export function VirtualKeyboard({
                   data-dwell-target="true"
                   disabled={disabled}
                   className={clsx(
-                    "dwell-key font-medium transition-all duration-200 ease-out flex items-center justify-center relative rounded-xl h-full min-h-0 px-4",
+                    "dwell-key font-medium transition-all duration-200 ease-out flex items-center justify-center relative rounded-xl h-full min-h-0 px-2 py-2",
                     
                     // Dwell active state (eye tracking hover) - using gradient
                     "data-[dwell-active=true]:bg-gradient-to-r data-[dwell-active=true]:from-[var(--madhacks-blue)] data-[dwell-active=true]:to-[var(--madhacks-blue-light)] data-[dwell-active=true]:text-white data-[dwell-active=true]:shadow-lg data-[dwell-active=true]:scale-105 data-[dwell-active=true]:z-10",
@@ -77,7 +77,7 @@ export function VirtualKeyboard({
                     !isSpace && !isBackspace && !isClear && !isAutocomplete && key.value !== "ENTER" && [
                       "flex-1",
                       "bg-white text-gray-900",
-                      "text-xl"
+                      "text-2xl"
                     ],
                     isSpace && [
                       "flex-[4] min-w-0",
