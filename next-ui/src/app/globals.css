@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb;
+  --foreground: #111827;
+  
+  /* MadHacks Theme Colors */
+  --madhacks-dark-blue: #0a1f44; /* Dark blue from MadHacks poster */
+  --madhacks-blue: #1e3a8a; /* Medium blue */
+  --madhacks-blue-light: #3b82f6; /* Lighter blue */
+  --madhacks-teal: #14b8a6; /* Teal accent */
+  --madhacks-teal-light: #5eead4; /* Light teal */
+  --madhacks-blue-gray: #475569; /* Blue-gray */
+  
+  /* Gradient colors */
+  --gradient-blue-start: #1e3a8a;
+  --gradient-blue-mid: #2563eb;
+  --gradient-teal-end: #14b8a6;
+  --gradient-light-start: #eff6ff;
+  --gradient-light-mid: #dbeafe;
+  --gradient-light-end: #cffafe;
+  
+  /* Global Brand Blue - Using MadHacks colors */
+  --brand-blue: var(--madhacks-blue);
+  --brand-blue-hover: var(--madhacks-blue-light);
+  --brand-blue-active: var(--madhacks-dark-blue);
+  --brand-blue-light: var(--gradient-light-start);
+  --brand-blue-border: #93c5fd;
+  --brand-blue-text: var(--madhacks-dark-blue);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  
+  /* Define custom colors using CSS variables for consistency */
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-hover: var(--brand-blue-hover);
+  --color-brand-blue-active: var(--brand-blue-active);
+  --color-brand-blue-light: var(--brand-blue-light);
+  --color-brand-blue-border: var(--brand-blue-border);
+  --color-brand-blue-text: var(--brand-blue-text);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure Inter font is used everywhere */
+*,
+*::before,
+*::after {
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.heading-font {
+  font-family: var(--font-heading), var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* Ensure Radix UI components also use Inter */
+.radix-themes {
+  --default-font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@keyframes caret-blink {
+  0%, 45% {
+    opacity: 1;
+  }
+  55%, 100% {
+    opacity: 0;
+  }
+}
+
+.caret-indicator {
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+/* Global Border Standardization */
+.radix-themes {
+  --radius-medium: 12px; /* Consistent rounded corners */
+  --accent-9: var(--madhacks-blue) !important;
+  --accent-10: var(--madhacks-blue-light) !important;
+  --focus-8: var(--madhacks-teal) !important;
+}
+
+/* Custom Scrollbar for cleaner look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* Dwell progress bar on keyboard keys */
+.dwell-key {
+  position: relative;
+  overflow: hidden;
+}
+
+.dwell-key::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--madhacks-blue) 0%, var(--madhacks-blue-light) 100%);
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.dwell-key[data-dwell-active="true"]::after {
+  opacity: 1;
+  animation: dwell-progress var(--dwell-duration, 500ms) linear forwards;
+}
+
+.dwell-key[data-dwell-active="false"]::after,
+.dwell-key:not([data-dwell-active])::after {
+  animation: none;
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.dwell-key[data-dwell-selected="true"]::after {
+  background: linear-gradient(90deg, var(--madhacks-blue-light) 0%, var(--madhacks-blue) 100%);
+  transform: scaleX(1);
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes dwell-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* MadHacks Gradient Utilities */
+.gradient-madhacks {
+  background: linear-gradient(135deg, var(--gradient-blue-start) 0%, var(--gradient-blue-mid) 50%, var(--gradient-teal-end) 100%);
+}
+
+.gradient-madhacks-light {
+  background: linear-gradient(135deg, var(--gradient-light-start) 0%, var(--gradient-light-mid) 50%, var(--gradient-light-end) 100%);
+}
+
+.gradient-blue-teal {
+  background: linear-gradient(135deg, var(--madhacks-blue) 0%, var(--madhacks-teal) 100%);
+}
+
+.gradient-button {
+  background: linear-gradient(135deg, var(--madhacks-blue) 0%, var(--madhacks-blue-light) 100%);
+  color: white;
+  border: none;
+}
+
+.gradient-button:hover {
+  background: linear-gradient(135deg, var(--madhacks-blue-light) 0%, var(--madhacks-blue) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(30, 58, 138, 0.3);
+}
+
+.gradient-button:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 10px rgba(30, 58, 138, 0.2);
+}
+
+/* Brand text gradient for "Unsilenced" header */
+.text-gradient-unsilenced {
+  /* Slightly narrower blue range: less dark on the left, less teal on the right */
+  background-image: linear-gradient(90deg, #2563eb 0%, #3b82f6 45%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
+.btn-gradient {
+  background: linear-gradient(135deg, var(--madhacks-blue) 0%, var(--madhacks-blue-light) 100%);
+  color: white;
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(135deg, var(--madhacks-blue-light) 0%, var(--madhacks-blue) 100%);
+}
+
+/* 3D Mockup Effect */
+.mockup-3d-container {
+  perspective: 1200px;
+  perspective-origin: center center;
+}
+
+.mockup-3d {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.mockup-3d-shadow {
+  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.2))
+          drop-shadow(0 15px 30px rgba(0, 0, 0, 0.15))
+          drop-shadow(0 5px 15px rgba(0, 0, 0, 0.1));
+  position: relative;
+}
+
+.mockup-3d-shadow::before {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(-50px);
+  width: 70%;
+  height: 40px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(25px);
+  z-index: -1;
+  opacity: 0.6;
+}
