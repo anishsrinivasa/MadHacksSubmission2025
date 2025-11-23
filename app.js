@@ -12,6 +12,7 @@ const coordY = document.getElementById('coordY');
 const textOutput = document.getElementById('textOutput');
 const keyboard = document.getElementById('keyboard');
 const keys = document.querySelectorAll('.key');
+const autocompleteBtn = document.querySelector('[data-key="AUTOCOMPLETE"]');
 const emotionIcon = document.getElementById('emotionIcon');
 const emotionLabel = document.getElementById('emotionLabel');
 const confidenceFill = document.getElementById('confidenceFill');
@@ -22,7 +23,7 @@ const voiceRadios = document.querySelectorAll('input[name="voice"]');
 let camera = null;
 let faceMesh = null;
 let isTracking = false;
-let selectedVoice = 'female'; // Default voice selection
+let selectedVoice = 'male'; // Default voice selection (American)
 
 // face-api.js model state
 let emotionModelsLoaded = false;
@@ -39,6 +40,108 @@ const smoothingFactor = 0.3; // Lower = smoother but more lag
 
 // Keyboard state
 let currentText = '';
+let currentSuggestion = ''; // Store the current autocomplete suggestion
+
+// Word completion functions
+function getBestSuggestion(prefix) {
+    if (!prefix || prefix.length < 2) {
+        return null;
+    }
+    
+    const lowerPrefix = prefix.toLowerCase();
+    const suggestions = WORD_DICTIONARY.filter(word => 
+        word.toLowerCase().startsWith(lowerPrefix)
+    );
+    
+    if (suggestions.length === 0) {
+        return null;
+    }
+    
+    // Sort by length (shorter first), then alphabetically
+    suggestions.sort((a, b) => {
+        if (a.length !== b.length) {
+            return a.length - b.length;
+        }
+        return a.localeCompare(b);
+    });
+    
+    // Return the best (first) suggestion
+    return suggestions[0];
+}
+
+function updateTextDisplay() {
+    if (!textOutput) return;
+    
+    // Extract last word from current text
+    const words = currentText.trim().split(/\s+/);
+    const lastWord = words.length > 0 ? words[words.length - 1] : '';
+    
+    // Get suggestion if applicable
+    let suggestion = null;
+    if (lastWord && lastWord.length >= 2 && !/^[0-9\W]+$/.test(lastWord)) {
+        const bestMatch = getBestSuggestion(lastWord);
+        if (bestMatch && bestMatch.toLowerCase() !== lastWord.toLowerCase()) {
+            suggestion = bestMatch;
+            currentSuggestion = bestMatch;
+        } else {
+            currentSuggestion = '';
+        }
+    } else {
+        currentSuggestion = '';
+    }
+    
+    // Display text with inline suggestion
+    if (suggestion) {
+        // Show current text + grey suggestion completion
+        const suggestionPart = suggestion.substring(lastWord.length);
+        
+        // Find where the last word ends in currentText
+        // We need to find the exact end position of lastWord in currentText
+        const lastWordStartIndex = currentText.lastIndexOf(lastWord);
+        
+        if (lastWordStartIndex >= 0) {
+            // Split at the end of the last word
+            const textBefore = currentText.substring(0, lastWordStartIndex + lastWord.length);
+            const textAfter = currentText.substring(lastWordStartIndex + lastWord.length);
+            
+            // Escape HTML in the text parts to prevent issues
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            const escapedTextBefore = escapeHtml(textBefore);
+            const escapedTextAfter = escapeHtml(textAfter);
+            const escapedSuggestionPart = escapeHtml(suggestionPart);
+            
+            // Build the display: text up to end of last word + grey completion + any text after
+            textOutput.innerHTML = escapedTextBefore + `<span class="autocomplete-preview">${escapedSuggestionPart}</span>` + escapedTextAfter;
+        } else {
+            // Fallback: just append the suggestion
+            const escapedCurrent = escapeHtml(currentText);
+            const escapedSuggestionPart = escapeHtml(suggestionPart);
+            textOutput.innerHTML = escapedCurrent + `<span class="autocomplete-preview">${escapedSuggestionPart}</span>`;
+        }
+        
+        // Enable autocomplete button
+        if (autocompleteBtn) {
+            autocompleteBtn.disabled = false;
+            autocompleteBtn.style.opacity = '1';
+            autocompleteBtn.style.cursor = 'pointer';
+        }
+    } else {
+        // Just show current text
+        textOutput.textContent = currentText;
+        
+        // Disable autocomplete button
+        if (autocompleteBtn) {
+            autocompleteBtn.disabled = true;
+            autocompleteBtn.style.opacity = '0.4';
+            autocompleteBtn.style.cursor = 'not-allowed';
+        }
+    }
+}
 
 // Universal element interaction state (for full-page accessibility)
 let hoveredElement = null;
@@ -72,6 +175,373 @@ const EMOTION_ICONS = {
     surprised: '😲',
     angry: '😠'
 };
+
+// Word dictionary for autocomplete (common words + AAC phrases)
+const WORD_DICTIONARY = [
+    // Common AAC phrases
+    'hello', 'help', 'yes', 'no', 'thank', 'you', 'please', 'sorry', 'okay', 'ok',
+    'hi', 'hey', 'goodbye', 'bye', 'thanks', 'welcome', 'excuse', 'me',
+    
+    // Common words (top 300 most used)
+    'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
+    'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at',
+    'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she',
+    'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what',
+    'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me',
+    'when', 'make', 'can', 'like', 'time', 'just', 'know', 'take', 'people',
+    'into', 'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other',
+    'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also',
+    'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way',
+    'even', 'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us',
+    'is', 'are', 'was', 'were', 'been', 'being', 'has', 'had', 'having', 'does',
+    'did', 'doing', 'done', 'said', 'says', 'saying', 'went', 'going', 'gone',
+    'got', 'getting', 'gotten', 'came', 'coming', 'seen', 'saw', 'made', 'making',
+    'took', 'taking', 'taken', 'gave', 'giving', 'given', 'found', 'finding',
+    'think', 'thought', 'know', 'knew', 'known', 'see', 'saw', 'seen', 'get',
+    'got', 'gotten', 'go', 'went', 'gone', 'come', 'came', 'make', 'made',
+    'take', 'took', 'taken', 'say', 'said', 'tell', 'told', 'ask', 'asked',
+    'try', 'tried', 'trying', 'need', 'needed', 'want', 'wanted', 'use', 'used',
+    'work', 'worked', 'working', 'call', 'called', 'calling', 'try', 'tried',
+    'move', 'moved', 'moving', 'live', 'lived', 'living', 'believe', 'believed',
+    'bring', 'brought', 'happen', 'happened', 'write', 'wrote', 'written',
+    'sit', 'sat', 'sitting', 'stand', 'stood', 'standing', 'lose', 'lost', 'losing',
+    'pay', 'paid', 'paying', 'meet', 'met', 'meeting', 'include', 'included',
+    'continue', 'continued', 'set', 'setting', 'learn', 'learned', 'change',
+    'changed', 'lead', 'led', 'leading', 'understand', 'understood', 'watch',
+    'watched', 'follow', 'followed', 'stop', 'stopped', 'stopping', 'create',
+    'created', 'speak', 'spoke', 'spoken', 'read', 'reading', 'allow', 'allowed',
+    'add', 'added', 'adding', 'spend', 'spent', 'spending', 'grow', 'grew', 'grown',
+    'open', 'opened', 'walk', 'walked', 'win', 'won', 'winning', 'offer', 'offered',
+    'remember', 'remembered', 'love', 'loved', 'consider', 'considered', 'appear',
+    'appeared', 'buy', 'bought', 'buying', 'wait', 'waited', 'waiting', 'serve',
+    'served', 'die', 'died', 'dying', 'send', 'sent', 'sending', 'build', 'built',
+    'stay', 'stayed', 'staying', 'fall', 'fell', 'fallen', 'cut', 'cutting',
+    'reach', 'reached', 'kill', 'killed', 'raise', 'raised', 'pass', 'passed',
+    'sell', 'sold', 'selling', 'decide', 'decided', 'return', 'returned',
+    'explain', 'explained', 'hope', 'hoped', 'hoping', 'develop', 'developed',
+    'carry', 'carried', 'break', 'broke', 'broken', 'receive', 'received',
+    'agree', 'agreed', 'support', 'supported', 'hit', 'hitting', 'produce',
+    'produced', 'eat', 'ate', 'eaten', 'cover', 'covered', 'catch', 'caught',
+    'draw', 'drew', 'drawn', 'choose', 'chose', 'chosen', 'die', 'died', 'dying',
+    'expect', 'expected', 'fight', 'fought', 'save', 'saved', 'saving', 'serve',
+    'served', 'end', 'ended', 'ending', 'create', 'created', 'join', 'joined',
+    'reduce', 'reduced', 'establish', 'established', 'ensure', 'ensured',
+    'require', 'required', 'indicate', 'indicated', 'suggest', 'suggested',
+    'maintain', 'maintained', 'present', 'presented', 'prevent', 'prevented',
+    'recognize', 'recognized', 'describe', 'described', 'improve', 'improved',
+    'achieve', 'achieved', 'manage', 'managed', 'obtain', 'obtained', 'express',
+    'expressed', 'determine', 'determined', 'prepare', 'prepared', 'operate',
+    'operated', 'discover', 'discovered', 'examine', 'examined', 'identify',
+    'identified', 'observe', 'observed', 'realize', 'realized', 'involve',
+    'involved', 'represent', 'represented', 'protect', 'protected', 'reflect',
+    'reflected', 'remove', 'removed', 'removing', 'replace', 'replaced',
+    'respond', 'responded', 'reveal', 'revealed', 'separate', 'separated',
+    'survive', 'survived', 'transform', 'transformed', 'transport', 'transported',
+    'treat', 'treated', 'treating', 'warn', 'warned', 'warning', 'waste',
+    'wasted', 'wasting', 'wonder', 'wondered', 'worry', 'worried', 'wrap',
+    'wrapped', 'wrapping', 'accept', 'accepted', 'achieve', 'achieved',
+    'acknowledge', 'acknowledged', 'acquire', 'acquired', 'adapt', 'adapted',
+    'adjust', 'adjusted', 'admire', 'admired', 'admit', 'admitted', 'adopt',
+    'adopted', 'advance', 'advanced', 'advise', 'advised', 'affect', 'affected',
+    'afford', 'afforded', 'agree', 'agreed', 'aim', 'aimed', 'aiming', 'allow',
+    'allowed', 'announce', 'announced', 'anticipate', 'anticipated', 'apologize',
+    'apologized', 'appear', 'appeared', 'apply', 'applied', 'appreciate',
+    'appreciated', 'approach', 'approached', 'approve', 'approved', 'argue',
+    'argued', 'arise', 'arose', 'arisen', 'arrange', 'arranged', 'arrest',
+    'arrested', 'arrive', 'arrived', 'ask', 'asked', 'assess', 'assessed',
+    'assign', 'assigned', 'assist', 'assisted', 'assume', 'assumed', 'assure',
+    'assured', 'attach', 'attached', 'attack', 'attacked', 'attempt', 'attempted',
+    'attend', 'attended', 'attract', 'attracted', 'avoid', 'avoided', 'award',
+    'awarded', 'aware', 'back', 'bad', 'bag', 'ball', 'band', 'bank', 'bar',
+    'base', 'basic', 'bath', 'beach', 'bear', 'beat', 'beautiful', 'bed',
+    'been', 'beer', 'before', 'begin', 'behind', 'being', 'believe', 'bell',
+    'below', 'beside', 'best', 'better', 'between', 'beyond', 'bicycle', 'big',
+    'bill', 'bird', 'birth', 'bit', 'bite', 'bitter', 'black', 'blade', 'blood',
+    'blow', 'blue', 'board', 'boat', 'body', 'bone', 'book', 'border', 'born',
+    'both', 'bottle', 'bottom', 'box', 'boy', 'branch', 'brave', 'bread',
+    'break', 'breakfast', 'breath', 'brick', 'bridge', 'bright', 'bring',
+    'broad', 'broken', 'brother', 'brown', 'brush', 'build', 'burn', 'bus',
+    'business', 'busy', 'but', 'buy', 'by', 'cake', 'call', 'calm', 'came',
+    'camp', 'can', 'card', 'care', 'careful', 'careless', 'carry', 'case',
+    'cat', 'catch', 'cause', 'certain', 'chain', 'chair', 'chance', 'change',
+    'chase', 'cheap', 'cheese', 'chicken', 'chief', 'child', 'children', 'choose',
+    'church', 'circle', 'city', 'class', 'clean', 'clear', 'climb', 'clock',
+    'close', 'cloth', 'cloud', 'cloudy', 'coat', 'coffee', 'cold', 'collect',
+    'college', 'color', 'comb', 'come', 'comfortable', 'common', 'compare',
+    'complete', 'computer', 'condition', 'consider', 'contain', 'continue',
+    'control', 'cook', 'cool', 'copy', 'corn', 'corner', 'correct', 'cost',
+    'cotton', 'cough', 'could', 'count', 'country', 'couple', 'courage', 'course',
+    'court', 'cover', 'cow', 'crack', 'crash', 'crawl', 'crazy', 'cream', 'create',
+    'creature', 'credit', 'crew', 'crop', 'cross', 'crowd', 'cruel', 'cry',
+    'cup', 'curious', 'current', 'curtain', 'curve', 'cushion', 'custom', 'cut',
+    'dad', 'damage', 'damp', 'dance', 'danger', 'dangerous', 'dark', 'date',
+    'daughter', 'dawn', 'day', 'dead', 'deaf', 'deal', 'dear', 'death', 'debt',
+    'decide', 'deep', 'deer', 'defeat', 'defend', 'defense', 'degree', 'delay',
+    'delicate', 'delicious', 'delight', 'deliver', 'demand', 'dentist', 'deny',
+    'depart', 'depend', 'depth', 'describe', 'desert', 'design', 'desire',
+    'desk', 'destroy', 'detail', 'determine', 'develop', 'devil', 'diamond',
+    'dictionary', 'die', 'difference', 'different', 'difficult', 'dig', 'dinner',
+    'direct', 'direction', 'dirt', 'dirty', 'discover', 'discuss', 'disease',
+    'dish', 'distance', 'distant', 'divide', 'do', 'doctor', 'dog', 'dollar',
+    'door', 'dot', 'double', 'doubt', 'down', 'dozen', 'draw', 'drawer', 'dream',
+    'dress', 'drink', 'drive', 'drop', 'drown', 'drug', 'drum', 'dry', 'duck',
+    'due', 'dull', 'during', 'dust', 'duty', 'each', 'eager', 'ear', 'early',
+    'earn', 'earth', 'east', 'easy', 'eat', 'edge', 'education', 'effect',
+    'effort', 'egg', 'eight', 'either', 'elbow', 'elder', 'electric', 'elephant',
+    'eleven', 'else', 'empty', 'end', 'enemy', 'energy', 'engine', 'engineer',
+    'enjoy', 'enough', 'enter', 'entire', 'entrance', 'envelope', 'equal',
+    'equipment', 'escape', 'especially', 'essential', 'establish', 'even',
+    'evening', 'event', 'ever', 'every', 'everyone', 'everything', 'everywhere',
+    'exact', 'examine', 'example', 'excellent', 'except', 'exchange', 'excite',
+    'exciting', 'excuse', 'exercise', 'exist', 'expect', 'expense', 'expensive',
+    'experience', 'experiment', 'explain', 'explode', 'explore', 'express',
+    'extra', 'extreme', 'eye', 'face', 'fact', 'factor', 'factory', 'fail',
+    'failure', 'fair', 'fairly', 'faith', 'fall', 'false', 'familiar', 'family',
+    'famous', 'fan', 'far', 'farm', 'farmer', 'fashion', 'fast', 'fat', 'father',
+    'fault', 'favor', 'favorite', 'fear', 'feast', 'feather', 'feature', 'feed',
+    'feel', 'feeling', 'fellow', 'female', 'fence', 'festival', 'fetch', 'fever',
+    'few', 'field', 'fierce', 'fight', 'figure', 'file', 'fill', 'film', 'final',
+    'find', 'fine', 'finger', 'finish', 'fire', 'firm', 'first', 'fish', 'fit',
+    'five', 'fix', 'flag', 'flame', 'flash', 'flat', 'flavor', 'flesh', 'flight',
+    'float', 'flood', 'floor', 'flour', 'flow', 'flower', 'fly', 'fold', 'folk',
+    'follow', 'fond', 'food', 'fool', 'foolish', 'foot', 'for', 'forbid', 'force',
+    'foreign', 'forest', 'forget', 'forgive', 'fork', 'form', 'formal', 'former',
+    'fort', 'forth', 'fortune', 'forty', 'forward', 'fought', 'found', 'four',
+    'fourth', 'fox', 'frame', 'free', 'freedom', 'freeze', 'fresh', 'friend',
+    'friendly', 'friendship', 'frighten', 'frog', 'from', 'front', 'fruit',
+    'fuel', 'full', 'fun', 'funny', 'fur', 'furniture', 'further', 'future',
+    'gain', 'game', 'garage', 'garden', 'gas', 'gate', 'gather', 'gave', 'gay',
+    'general', 'generous', 'gentle', 'gentleman', 'geography', 'get', 'giant',
+    'gift', 'girl', 'give', 'glad', 'glass', 'globe', 'glory', 'glove', 'glow',
+    'go', 'goat', 'god', 'gold', 'golden', 'gone', 'good', 'goodbye', 'goods',
+    'goose', 'got', 'govern', 'government', 'gown', 'grace', 'grade', 'grain',
+    'grand', 'grandfather', 'grandmother', 'grant', 'grass', 'grave', 'gray',
+    'great', 'green', 'greet', 'grew', 'grey', 'grief', 'grin', 'grip', 'ground',
+    'group', 'grow', 'grown', 'growth', 'guard', 'guess', 'guest', 'guide',
+    'guilt', 'guilty', 'gulf', 'gun', 'habit', 'had', 'hair', 'half', 'hall',
+    'ham', 'hand', 'handful', 'handle', 'handsome', 'hang', 'happen', 'happy',
+    'harbor', 'hard', 'hardly', 'harm', 'harmful', 'harp', 'harsh', 'harvest',
+    'has', 'haste', 'hat', 'hate', 'have', 'hay', 'he', 'head', 'heal', 'health',
+    'healthy', 'heap', 'hear', 'heard', 'heart', 'heat', 'heaven', 'heavy',
+    'hedge', 'heel', 'height', 'held', 'hell', 'hello', 'help', 'helpful', 'hen',
+    'her', 'here', 'herd', 'hero', 'hers', 'herself', 'hesitate', 'hew', 'hid',
+    'hidden', 'hide', 'high', 'highway', 'hill', 'him', 'himself', 'hind', 'hint',
+    'hip', 'hire', 'his', 'history', 'hit', 'hive', 'ho', 'hold', 'hole', 'holiday',
+    'hollow', 'holy', 'home', 'honest', 'honey', 'honor', 'hook', 'hope', 'horn',
+    'horror', 'horse', 'hospital', 'host', 'hot', 'hotel', 'hour', 'house',
+    'how', 'however', 'huge', 'human', 'humble', 'humor', 'hundred', 'hung',
+    'hunger', 'hungry', 'hunt', 'hurry', 'hurt', 'husband', 'hut', 'i', 'ice',
+    'idea', 'ideal', 'idle', 'if', 'ill', 'image', 'imagine', 'immediate',
+    'importance', 'important', 'impossible', 'improve', 'in', 'inch', 'income',
+    'increase', 'indeed', 'independent', 'indicate', 'individual', 'industry',
+    'influence', 'inform', 'information', 'ink', 'inn', 'inner', 'innocent',
+    'insect', 'inside', 'insist', 'instance', 'instant', 'instead', 'instrument',
+    'insult', 'intend', 'interest', 'interesting', 'interior', 'internal',
+    'international', 'interpret', 'interrupt', 'into', 'introduce', 'invent',
+    'invite', 'involve', 'iron', 'is', 'island', 'it', 'its', 'itself', 'jacket',
+    'jam', 'jar', 'jaw', 'jazz', 'jealous', 'jeans', 'jet', 'jewel', 'job',
+    'join', 'joke', 'journey', 'joy', 'judge', 'juice', 'jump', 'junior', 'jury',
+    'just', 'justice', 'keep', 'kept', 'key', 'kick', 'kid', 'kill', 'kind',
+    'king', 'kiss', 'kitchen', 'kite', 'knee', 'knew', 'knife', 'knock', 'knot',
+    'know', 'known', 'lab', 'label', 'labor', 'lack', 'ladder', 'lady', 'laid',
+    'lake', 'lamb', 'lamp', 'land', 'lane', 'language', 'lap', 'large', 'last',
+    'late', 'lately', 'later', 'latter', 'laugh', 'launch', 'law', 'lawn', 'lawyer',
+    'lay', 'lazy', 'lead', 'leader', 'leaf', 'league', 'lean', 'learn', 'least',
+    'leather', 'leave', 'led', 'left', 'leg', 'legal', 'lemon', 'lend', 'length',
+    'lens', 'less', 'lesson', 'let', 'letter', 'level', 'liar', 'liberty',
+    'library', 'license', 'lid', 'lie', 'life', 'lift', 'light', 'like', 'likely',
+    'limb', 'lime', 'limit', 'line', 'lion', 'lip', 'liquid', 'list', 'listen',
+    'liter', 'little', 'live', 'lively', 'liver', 'living', 'load', 'loaf',
+    'loan', 'local', 'locate', 'lock', 'locomotive', 'log', 'lonely', 'long',
+    'look', 'loose', 'lose', 'loss', 'lost', 'lot', 'loud', 'love', 'lovely',
+    'low', 'lower', 'luck', 'lucky', 'lunch', 'lung', 'machine', 'mad', 'made',
+    'magazine', 'magic', 'maid', 'mail', 'main', 'mainly', 'maintain', 'major',
+    'make', 'male', 'mall', 'man', 'manage', 'manager', 'manner', 'many', 'map',
+    'march', 'mark', 'market', 'marriage', 'married', 'marry', 'mass', 'master',
+    'match', 'mate', 'material', 'matter', 'may', 'maybe', 'mayor', 'me', 'meal',
+    'mean', 'meaning', 'meant', 'meanwhile', 'measure', 'meat', 'mechanic',
+    'medical', 'medicine', 'meet', 'meeting', 'melt', 'member', 'memory', 'men',
+    'mend', 'mental', 'mention', 'menu', 'mercy', 'mere', 'merely', 'merry',
+    'mess', 'message', 'metal', 'method', 'meter', 'middle', 'might', 'mild',
+    'mile', 'milk', 'mill', 'million', 'mind', 'mine', 'mineral', 'minister',
+    'minor', 'minus', 'minute', 'miracle', 'mirror', 'misery', 'miss', 'mistake',
+    'mix', 'model', 'modern', 'modest', 'moment', 'monday', 'money', 'monkey',
+    'month', 'mood', 'moon', 'moral', 'more', 'moreover', 'morning', 'most',
+    'mother', 'motion', 'motor', 'mountain', 'mouse', 'mouth', 'move', 'movement',
+    'movie', 'much', 'mud', 'multiply', 'murder', 'muscle', 'museum', 'music',
+    'musical', 'must', 'mute', 'mutual', 'my', 'myself', 'mystery', 'nail',
+    'naked', 'name', 'narrow', 'nation', 'nation', 'national', 'native', 'natural',
+    'naturally', 'nature', 'naughty', 'navy', 'near', 'nearly', 'neat', 'necessary',
+    'neck', 'need', 'needle', 'negative', 'neighbor', 'neighborhood', 'neither',
+    'nephew', 'nerve', 'nervous', 'nest', 'net', 'network', 'never', 'nevertheless',
+    'new', 'news', 'newspaper', 'next', 'nice', 'niece', 'night', 'nine', 'no',
+    'noble', 'nobody', 'nod', 'noise', 'noisy', 'none', 'noon', 'nor', 'normal',
+    'north', 'nose', 'not', 'note', 'nothing', 'notice', 'noun', 'novel', 'now',
+    'nowhere', 'nuclear', 'number', 'numerous', 'nurse', 'nut', 'oak', 'oar',
+    'obey', 'object', 'observe', 'obtain', 'obvious', 'occasion', 'occur',
+    'ocean', 'odd', 'of', 'off', 'offer', 'office', 'officer', 'official',
+    'often', 'oh', 'oil', 'okay', 'old', 'on', 'once', 'one', 'only', 'onto',
+    'open', 'opera', 'operate', 'opinion', 'opportunity', 'oppose', 'opposite',
+    'or', 'orange', 'order', 'ordinary', 'organ', 'organize', 'origin', 'original',
+    'other', 'otherwise', 'ought', 'our', 'ours', 'ourselves', 'out', 'outdoor',
+    'outer', 'outline', 'outside', 'outstanding', 'over', 'overall', 'overcoat',
+    'owe', 'own', 'owner', 'pace', 'pack', 'package', 'page', 'paid', 'pain',
+    'paint', 'pair', 'palace', 'pale', 'pan', 'pants', 'paper', 'paragraph',
+    'pardon', 'parent', 'park', 'part', 'particular', 'particularly', 'partly',
+    'partner', 'party', 'pass', 'passage', 'passenger', 'past', 'paste', 'pat',
+    'path', 'patience', 'patient', 'pattern', 'pause', 'paw', 'pay', 'peace',
+    'peaceful', 'peach', 'peak', 'pear', 'peasant', 'pen', 'pencil', 'penny',
+    'people', 'pepper', 'per', 'percent', 'perfect', 'perform', 'performance',
+    'perhaps', 'period', 'permanent', 'permit', 'person', 'personal', 'personally',
+    'persuade', 'pet', 'phase', 'philosophy', 'phone', 'photograph', 'phrase',
+    'physical', 'piano', 'pick', 'picnic', 'picture', 'pie', 'piece', 'pig',
+    'pile', 'pill', 'pillow', 'pilot', 'pin', 'pine', 'pink', 'pint', 'pipe',
+    'pistol', 'pit', 'pitch', 'pity', 'place', 'plain', 'plan', 'plane', 'planet',
+    'plant', 'plastic', 'plate', 'platform', 'play', 'player', 'playground',
+    'pleasant', 'please', 'pleasure', 'plenty', 'plot', 'plow', 'plug', 'plunge',
+    'plural', 'plus', 'pocket', 'poem', 'poet', 'poetry', 'point', 'poison',
+    'pole', 'police', 'policeman', 'polish', 'polite', 'political', 'politician',
+    'politics', 'pollution', 'pond', 'pool', 'poor', 'pop', 'popular', 'population',
+    'porch', 'port', 'portion', 'portrait', 'position', 'positive', 'possess',
+    'possession', 'possibility', 'possible', 'possibly', 'post', 'postage',
+    'postman', 'pot', 'potato', 'pound', 'pour', 'poverty', 'powder', 'power',
+    'powerful', 'practical', 'practice', 'praise', 'pray', 'prayer', 'precious',
+    'precise', 'predict', 'prefer', 'preference', 'prejudice', 'prepare',
+    'presence', 'present', 'preserve', 'president', 'press', 'pressure', 'pretend',
+    'pretty', 'prevent', 'previous', 'previously', 'price', 'pride', 'priest',
+    'primary', 'prime', 'prince', 'princess', 'principal', 'principle', 'print',
+    'prison', 'prisoner', 'private', 'prize', 'probably', 'problem', 'process',
+    'produce', 'product', 'production', 'profession', 'professional', 'professor',
+    'profit', 'program', 'progress', 'project', 'promise', 'promote', 'prompt',
+    'pronounce', 'pronunciation', 'proof', 'proper', 'properly', 'property',
+    'proposal', 'propose', 'protect', 'protection', 'proud', 'prove', 'provide',
+    'provided', 'province', 'public', 'publish', 'pull', 'pump', 'punch', 'punish',
+    'punishment', 'pupil', 'purchase', 'pure', 'purple', 'purpose', 'purse',
+    'push', 'put', 'puzzle', 'qualify', 'quality', 'quantity', 'quarrel', 'quarter',
+    'queen', 'question', 'quick', 'quickly', 'quiet', 'quietly', 'quit', 'quite',
+    'quote', 'rabbit', 'race', 'radio', 'rail', 'railroad', 'railway', 'rain',
+    'raise', 'range', 'rank', 'rapid', 'rapidly', 'rare', 'rarely', 'rat', 'rate',
+    'rather', 'raw', 'ray', 'reach', 'react', 'reaction', 'read', 'reader',
+    'reading', 'ready', 'real', 'reality', 'realize', 'really', 'rear', 'reason',
+    'reasonable', 'reasonably', 'receive', 'recent', 'recently', 'recognize',
+    'record', 'recorder', 'recover', 'red', 'reduce', 'reduction', 'refer',
+    'reference', 'reflect', 'reflection', 'reform', 'refuse', 'regard', 'region',
+    'regret', 'regular', 'regularly', 'reject', 'relate', 'relation', 'relationship',
+    'relative', 'relatively', 'relax', 'release', 'relief', 'religion', 'religious',
+    'rely', 'remain', 'remark', 'remarkable', 'remember', 'remind', 'remote',
+    'remove', 'rent', 'repair', 'repeat', 'replace', 'reply', 'report', 'represent',
+    'representative', 'reputation', 'request', 'require', 'requirement', 'rescue',
+    'research', 'reserve', 'resident', 'resist', 'resistance', 'resolve', 'resort',
+    'resource', 'respect', 'respond', 'response', 'responsibility', 'responsible',
+    'rest', 'restaurant', 'restore', 'restrict', 'result', 'retain', 'retire',
+    'return', 'reveal', 'revenge', 'review', 'revolution', 'reward', 'rice',
+    'rich', 'rid', 'ride', 'rider', 'ridiculous', 'rifle', 'right', 'ring',
+    'ripe', 'rise', 'risk', 'rival', 'river', 'road', 'roar', 'roast', 'rob',
+    'robber', 'rock', 'rocket', 'rod', 'role', 'roll', 'roof', 'room', 'root',
+    'rope', 'rose', 'rot', 'rotten', 'rough', 'roughly', 'round', 'route',
+    'row', 'royal', 'rub', 'rubber', 'rubbish', 'rude', 'ruin', 'rule', 'ruler',
+    'rumor', 'run', 'rural', 'rush', 'rust', 'sad', 'saddle', 'safe', 'safety',
+    'sail', 'sailor', 'sake', 'salad', 'salary', 'sale', 'salt', 'salute',
+    'same', 'sample', 'sand', 'satisfaction', 'satisfactory', 'satisfy', 'saturday',
+    'sauce', 'save', 'saw', 'say', 'scale', 'scandal', 'scarce', 'scarcely',
+    'scare', 'scatter', 'scene', 'scenery', 'schedule', 'scheme', 'scholar',
+    'scholarship', 'school', 'science', 'scientific', 'scientist', 'scissors',
+    'scold', 'scope', 'score', 'scorn', 'scout', 'scrape', 'scratch', 'scream',
+    'screen', 'screw', 'sea', 'seal', 'search', 'season', 'seat', 'second',
+    'secondary', 'secret', 'secretary', 'section', 'secure', 'security', 'see',
+    'seed', 'seek', 'seem', 'seize', 'seldom', 'select', 'selection', 'self',
+    'sell', 'send', 'senior', 'sense', 'sensible', 'sensitive', 'sentence',
+    'separate', 'september', 'series', 'serious', 'seriously', 'servant', 'serve',
+    'service', 'session', 'set', 'settle', 'settlement', 'seven', 'several',
+    'severe', 'sew', 'shade', 'shadow', 'shake', 'shall', 'shame', 'shape',
+    'share', 'sharp', 'shave', 'she', 'sheep', 'sheet', 'shelf', 'shell', 'shelter',
+    'shield', 'shift', 'shine', 'ship', 'shirt', 'shock', 'shoe', 'shoot', 'shop',
+    'shore', 'short', 'shortly', 'shot', 'should', 'shoulder', 'shout', 'show',
+    'shower', 'shut', 'sick', 'side', 'sight', 'sign', 'signal', 'signature',
+    'significant', 'silence', 'silent', 'silk', 'silly', 'silver', 'similar',
+    'similarly', 'simple', 'simply', 'sin', 'since', 'sincere', 'sing', 'singer',
+    'single', 'sink', 'sir', 'sister', 'sit', 'site', 'situation', 'six', 'size',
+    'skill', 'skin', 'skirt', 'sky', 'slave', 'sleep', 'slice', 'slide', 'slight',
+    'slightly', 'slip', 'slope', 'slow', 'slowly', 'small', 'smart', 'smell',
+    'smile', 'smoke', 'smooth', 'snake', 'snow', 'so', 'soap', 'soar', 'sob',
+    'social', 'society', 'sock', 'soft', 'soil', 'soldier', 'sole', 'solid',
+    'solution', 'solve', 'some', 'somebody', 'somehow', 'someone', 'something',
+    'sometimes', 'somewhat', 'somewhere', 'son', 'song', 'soon', 'sore', 'sorrow',
+    'sorry', 'sort', 'soul', 'sound', 'soup', 'sour', 'south', 'southern',
+    'space', 'spare', 'speak', 'speaker', 'special', 'species', 'specific',
+    'speech', 'speed', 'spell', 'spend', 'spirit', 'spiritual', 'spit', 'spite',
+    'splendid', 'split', 'spoil', 'spoon', 'sport', 'spot', 'spread', 'spring',
+    'square', 'squeeze', 'stable', 'staff', 'stage', 'stain', 'stair', 'stake',
+    'stale', 'stamp', 'stand', 'standard', 'star', 'stare', 'start', 'starve',
+    'state', 'statement', 'station', 'statue', 'status', 'stay', 'steady', 'steal',
+    'steam', 'steel', 'steep', 'steer', 'stem', 'step', 'stick', 'stiff', 'still',
+    'sting', 'stir', 'stock', 'stomach', 'stone', 'stool', 'stop', 'store',
+    'storm', 'story', 'stove', 'straight', 'strain', 'strange', 'stranger',
+    'strap', 'straw', 'stream', 'street', 'strength', 'stress', 'stretch',
+    'strict', 'strike', 'string', 'strip', 'stripe', 'stroke', 'strong',
+    'strongly', 'structure', 'struggle', 'stubborn', 'student', 'study', 'stuff',
+    'stupid', 'style', 'subject', 'submit', 'substance', 'succeed', 'success',
+    'successful', 'such', 'sudden', 'suddenly', 'suffer', 'sugar', 'suggest',
+    'suit', 'suitable', 'sum', 'summer', 'sun', 'sunday', 'sunny', 'sunset',
+    'sunshine', 'super', 'superior', 'supper', 'supply', 'support', 'suppose',
+    'sure', 'surely', 'surface', 'surprise', 'surround', 'surrounding', 'survive',
+    'suspect', 'suspicion', 'suspicious', 'swallow', 'swamp', 'swan', 'swear',
+    'sweat', 'sweep', 'sweet', 'swell', 'swift', 'swim', 'swing', 'switch',
+    'sword', 'symbol', 'sympathy', 'system', 'table', 'tail', 'take', 'tale',
+    'talk', 'tall', 'tame', 'tank', 'tap', 'tape', 'target', 'task', 'taste',
+    'tax', 'taxi', 'tea', 'teach', 'teacher', 'team', 'tear', 'tease', 'teeth',
+    'telephone', 'television', 'tell', 'temper', 'temperature', 'temple', 'tempt',
+    'ten', 'tend', 'tendency', 'tender', 'tennis', 'tense', 'tent', 'term',
+    'terrible', 'terribly', 'territory', 'terror', 'test', 'text', 'than', 'thank',
+    'that', 'the', 'theater', 'theatre', 'their', 'theirs', 'them', 'themselves',
+    'then', 'there', 'therefore', 'these', 'they', 'thick', 'thief', 'thin',
+    'thing', 'think', 'third', 'thirst', 'thirsty', 'thirteen', 'thirty', 'this',
+    'thorough', 'those', 'though', 'thought', 'thousand', 'thread', 'threat',
+    'threaten', 'three', 'threw', 'throat', 'through', 'throughout', 'throw',
+    'thumb', 'thunder', 'thursday', 'thus', 'tick', 'ticket', 'tide', 'tidy',
+    'tie', 'tiger', 'tight', 'till', 'time', 'tin', 'tiny', 'tip', 'tire',
+    'tired', 'tissue', 'title', 'to', 'tobacco', 'today', 'toe', 'together',
+    'toilet', 'tomato', 'tomorrow', 'ton', 'tone', 'tongue', 'tonight', 'too',
+    'took', 'tool', 'tooth', 'top', 'topic', 'torch', 'torn', 'torture', 'toss',
+    'total', 'touch', 'tough', 'tour', 'toward', 'towards', 'towel', 'tower',
+    'town', 'toy', 'trace', 'track', 'trade', 'tradition', 'traditional',
+    'traffic', 'tragedy', 'trail', 'train', 'trainer', 'training', 'transfer',
+    'transform', 'translate', 'transport', 'trap', 'travel', 'tray', 'treasure',
+    'treat', 'treatment', 'tree', 'tremble', 'tremendous', 'trend', 'trial',
+    'tribe', 'trick', 'tried', 'trip', 'troop', 'trouble', 'troublesome', 'trousers',
+    'truck', 'true', 'truly', 'trunk', 'trust', 'truth', 'try', 'tube', 'tuesday',
+    'tune', 'tunnel', 'turn', 'twelve', 'twenty', 'twice', 'twin', 'twist', 'two',
+    'type', 'typical', 'ugly', 'umbrella', 'unable', 'uncle', 'under', 'underground',
+    'understand', 'understanding', 'undertake', 'unemployment', 'unexpected',
+    'unfair', 'unfortunate', 'unfortunately', 'unhappy', 'uniform', 'union',
+    'unique', 'unit', 'unite', 'united', 'unity', 'universal', 'universe',
+    'university', 'unknown', 'unless', 'unlike', 'unlikely', 'until', 'unusual',
+    'up', 'upon', 'upper', 'upset', 'upside', 'upstairs', 'upward', 'urge',
+    'urgent', 'us', 'use', 'used', 'useful', 'useless', 'usual', 'usually',
+    'utility', 'utilize', 'utmost', 'utter', 'utterly', 'vacation', 'vain',
+    'valid', 'valley', 'valuable', 'value', 'van', 'variety', 'various', 'vary',
+    'vast', 'vegetable', 'vehicle', 'venture', 'verb', 'verse', 'version',
+    'versus', 'very', 'vessel', 'veteran', 'via', 'vice', 'victim', 'victory',
+    'video', 'view', 'village', 'violence', 'violent', 'violin', 'virtue',
+    'virus', 'visible', 'vision', 'visit', 'visitor', 'visual', 'vital', 'voice',
+    'volume', 'volunteer', 'vote', 'wage', 'waist', 'wait', 'wake', 'walk',
+    'wall', 'wander', 'want', 'war', 'ward', 'warm', 'warn', 'warning', 'wash',
+    'waste', 'watch', 'water', 'wave', 'way', 'we', 'weak', 'weakness', 'wealth',
+    'weapon', 'wear', 'weather', 'wedding', 'wednesday', 'weed', 'week', 'weep',
+    'weigh', 'weight', 'welcome', 'welfare', 'well', 'went', 'were', 'west',
+    'western', 'wet', 'what', 'whatever', 'wheat', 'wheel', 'when', 'whenever',
+    'where', 'whereas', 'wherever', 'whether', 'which', 'whichever', 'while',
+    'whisper', 'whistle', 'white', 'who', 'whoever', 'whole', 'whom', 'whose',
+    'why', 'wide', 'widely', 'widespread', 'wife', 'wild', 'will', 'willing',
+    'win', 'wind', 'window', 'wine', 'wing', 'winner', 'winter', 'wipe', 'wire',
+    'wise', 'wish', 'wit', 'with', 'withdraw', 'within', 'without', 'witness',
+    'woman', 'wonder', 'wonderful', 'wood', 'wooden', 'wool', 'word', 'work',
+    'worker', 'world', 'worn', 'worried', 'worry', 'worse', 'worship', 'worst',
+    'worth', 'worthy', 'would', 'wound', 'wrap', 'wreck', 'wrist', 'write',
+    'writer', 'writing', 'written', 'wrong', 'wrote', 'yard', 'yawn', 'year',
+    'yellow', 'yes', 'yesterday', 'yet', 'yield', 'you', 'young', 'your',
+    'yours', 'yourself', 'youth', 'zero', 'zone'
+];
 
 // MediaPipe Face Mesh configuration
 function initFaceMesh() {
@@ -245,7 +715,7 @@ function onResults(results) {
                     if (Math.random() < 0.1) { // Log occasionally
                         console.log('[onResults] Emotion detected:', emotion, 'confidence:', confidence);
                     }
-                    updateEmotionUI(emotion, confidence);
+        updateEmotionUI(emotion, confidence);
                     emotionDetectionPending = false;
                 })
                 .catch(error => {
@@ -287,13 +757,13 @@ function checkElementHover() {
     // Find first interactive element (buttons, keyboard keys, voice options)
     let foundElement = null;
     for (const element of elementsAtPoint) {
-        // Check for keyboard keys
-        if (element.classList.contains('key')) {
+        // Check for keyboard keys (skip if disabled)
+        if (element.classList.contains('key') && !element.disabled) {
             foundElement = element;
             break;
         }
         // Check for control buttons (Start/Stop Camera)
-        if (element.id === 'startBtn' || element.id === 'stopBtn') {
+        if ((element.id === 'startBtn' || element.id === 'stopBtn') && !element.disabled) {
             foundElement = element;
             break;
         }
@@ -343,9 +813,9 @@ function selectElement(element) {
     // Add selection visual feedback
     if (element.classList.contains('key')) {
         element.classList.add('selecting');
-        setTimeout(() => {
+    setTimeout(() => {
             element.classList.remove('selecting', 'hovering');
-        }, 200);
+    }, 200);
     } else {
         element.classList.remove('nose-hovering');
     }
@@ -355,19 +825,36 @@ function selectElement(element) {
         // Keyboard key selected
         const keyValue = element.getAttribute('data-key');
 
-        // Handle different key types
-        if (keyValue === 'BACKSPACE') {
-            currentText = currentText.slice(0, -1);
-        } else if (keyValue === 'CLEAR') {
-            currentText = '';
-        } else if (keyValue === 'ENTER') {
-            // Check cooldown before speaking
-            if (speakCooldown) {
-                console.log('SPEAK button on cooldown, please wait...');
-                status.textContent = 'Please wait (cooldown)...';
-                status.style.color = '#f59e0b';
-                return;
+    // Handle different key types
+    if (keyValue === 'BACKSPACE') {
+        currentText = currentText.slice(0, -1);
+            updateTextDisplay();
+    } else if (keyValue === 'CLEAR') {
+        currentText = '';
+            currentSuggestion = '';
+            updateTextDisplay();
+        } else if (keyValue === 'AUTOCOMPLETE') {
+            // Accept autocomplete suggestion (only if button is enabled)
+            if (element.disabled || !currentSuggestion) {
+                return; // Don't do anything if disabled or no suggestion
             }
+            const words = currentText.trim().split(/\s+/);
+            if (words.length > 0) {
+                words[words.length - 1] = currentSuggestion;
+                currentText = words.join(' ') + ' ';
+            } else {
+                currentText = currentSuggestion + ' ';
+            }
+            currentSuggestion = '';
+            updateTextDisplay();
+    } else if (keyValue === 'ENTER') {
+        // Check cooldown before speaking
+        if (speakCooldown) {
+            console.log('SPEAK button on cooldown, please wait...');
+            status.textContent = 'Please wait (cooldown)...';
+            status.style.color = '#f59e0b';
+            return;
+        }
 
             // DEBUG: Log emotion state at button press
             console.log('=== SPEAK BUTTON PRESSED ===');
@@ -375,21 +862,29 @@ function selectElement(element) {
             console.log('currentEmotion type:', typeof currentEmotion);
             console.log('emotionConfidence:', emotionConfidence);
 
-            // Trigger text-to-speech with detected emotion
-            speakText(currentText, currentEmotion);
+        // Trigger text-to-speech with detected emotion
+        speakText(currentText, currentEmotion);
 
-            // Set cooldown for 2 seconds
-            speakCooldown = true;
-            setTimeout(() => {
-                speakCooldown = false;
-                console.log('SPEAK button cooldown expired');
-            }, 2000);
-        } else {
+        // Set cooldown for 2 seconds
+        speakCooldown = true;
+        setTimeout(() => {
+            speakCooldown = false;
+            console.log('SPEAK button cooldown expired');
+        }, 2000);
+            
+            // Clear suggestion when speaking
+            currentSuggestion = '';
+            updateTextDisplay();
+        } else if (keyValue === ' ') {
+            // Space key - word complete, clear suggestion
             currentText += keyValue;
+            currentSuggestion = '';
+            updateTextDisplay();
+    } else {
+            // Regular letter/number/punctuation
+        currentText += keyValue;
+            updateTextDisplay();
         }
-
-        // Update text display
-        textOutput.textContent = currentText;
     } else if (element.id === 'startBtn') {
         // Start Camera button selected
         if (!element.disabled) {
@@ -738,8 +1233,22 @@ async function speakText(text, emotion) {
         console.log('voiceParams object:', voiceParams);
         console.log('voiceParams.speed:', voiceParams.speed);
 
+        // Validate CONFIG is loaded
+        if (!CONFIG || !CONFIG.VOICE_REFERENCES) {
+            throw new Error('CONFIG not loaded. Please refresh the page.');
+        }
+
         // Get selected voice reference ID (male/female)
         const voiceReferenceId = CONFIG.VOICE_REFERENCES[selectedVoice];
+
+        // Validate voice reference ID exists
+        if (!voiceReferenceId) {
+            const availableVoices = Object.keys(CONFIG.VOICE_REFERENCES).join(', ');
+            console.error(`Voice reference ID not found for voice: "${selectedVoice}"`);
+            console.error(`Available voices: ${availableVoices}`);
+            console.error(`CONFIG.VOICE_REFERENCES:`, CONFIG.VOICE_REFERENCES);
+            throw new Error(`Voice reference ID not found for voice: ${selectedVoice}. Available voices: ${availableVoices}`);
+        }
 
         // Debug logging
         console.log('=== Fish Audio TTS Request ===');
@@ -772,7 +1281,7 @@ async function speakText(text, emotion) {
         console.log('Request Body:', JSON.stringify(requestBody, null, 2));
 
         // Call local proxy server (avoids CORS issues)
-        const response = await fetch('http://localhost:5000/tts', {
+        const response = await fetch('http://localhost:5001/tts', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -830,8 +1339,16 @@ async function speakText(text, emotion) {
         console.error('Error Type:', error.name);
         console.error('Error Message:', error.message);
         console.error('Stack Trace:', error.stack);
+        console.error('Selected Voice:', selectedVoice);
+        console.error('Voice Reference ID:', CONFIG.VOICE_REFERENCES[selectedVoice]);
+        console.error('CONFIG.VOICE_REFERENCES:', CONFIG.VOICE_REFERENCES);
+
+        // Show error to user
+        status.textContent = `Error: ${error.message}`;
+        status.style.color = '#ef4444';
 
         // Fallback to Web Speech API if Fish Audio fails
+        console.log('Falling back to Web Speech API...');
         status.textContent = 'Fish Audio failed, using fallback...';
         status.style.color = '#f59e0b';
 
@@ -1039,6 +1556,7 @@ startBtn.addEventListener('click', startTracking);
 stopBtn.addEventListener('click', stopTracking);
 
 // Voice selection event listeners
+// Voice selection event listeners
 voiceRadios.forEach(radio => {
     radio.addEventListener('change', (e) => {
         selectedVoice = e.target.value;
@@ -1046,10 +1564,72 @@ voiceRadios.forEach(radio => {
     });
 });
 
+// Add mouse hover and click support to keyboard keys for testing
+let mouseHoveredKey = null;
+let mouseDwellTimeout = null;
+
+keys.forEach(key => {
+    // Mouse hover with dwell time (same as nose tracking)
+    key.addEventListener('mouseenter', () => {
+        // Clear any existing timeout
+        if (mouseDwellTimeout) {
+            clearTimeout(mouseDwellTimeout);
+        }
+        
+        // Clear previous hovered key
+        if (mouseHoveredKey && mouseHoveredKey !== key) {
+            mouseHoveredKey.classList.remove('hovering');
+        }
+        
+        mouseHoveredKey = key;
+        key.classList.add('hovering');
+        
+        // Start dwell timer
+        mouseDwellTimeout = setTimeout(() => {
+            selectElement(key);
+            key.classList.remove('hovering');
+            mouseHoveredKey = null;
+        }, dwellTime);
+    });
+    
+    key.addEventListener('mouseleave', () => {
+        if (mouseDwellTimeout) {
+            clearTimeout(mouseDwellTimeout);
+            mouseDwellTimeout = null;
+        }
+        if (mouseHoveredKey === key) {
+            key.classList.remove('hovering');
+            mouseHoveredKey = null;
+        }
+    });
+    
+    // Immediate click support (for faster testing)
+    key.addEventListener('click', (e) => {
+        e.preventDefault();
+        // Clear hover timeout if exists
+        if (mouseDwellTimeout) {
+            clearTimeout(mouseDwellTimeout);
+            mouseDwellTimeout = null;
+        }
+        if (mouseHoveredKey === key) {
+            key.classList.remove('hovering');
+            mouseHoveredKey = null;
+        }
+        selectElement(key);
+    });
+});
+
 // Initialize emotion models on page load
 initEmotionModel().catch(error => {
     console.error('Failed to initialize emotion models:', error);
 });
+
+// Initialize autocomplete button (disabled by default)
+if (autocompleteBtn) {
+    autocompleteBtn.disabled = true;
+    autocompleteBtn.style.opacity = '0.4';
+    autocompleteBtn.style.cursor = 'not-allowed';
+}
 
 // Initialize
 status.textContent = 'Click "Start Camera" to begin';

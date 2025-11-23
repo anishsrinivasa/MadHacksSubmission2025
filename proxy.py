@@ -36,6 +36,7 @@ def text_to_speech():
 
         # Forward request to Fish Audio API
         headers = {
+            'model': "s1",
             'Authorization': f'Bearer {FISH_AUDIO_API_KEY}',
             'Content-Type': 'application/json'
         }
@@ -82,12 +83,128 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'ok', 'service': 'Fish Audio Proxy'})
 
+@app.route('/search-voices', methods=['GET'])
+def search_voices():
+    """
+    Endpoint to search for voices from Fish Audio API
+    Supports query parameters: q (search query), language, tags, limit, offset
+    """
+    try:
+        headers = {
+            'Authorization': f'Bearer {FISH_AUDIO_API_KEY}',
+            'Content-Type': 'application/json',
+            'model': 's1'
+        }
+        
+        # Get query parameters
+        query = request.args.get('q', '')
+        language = request.args.get('language', '')
+        tags = request.args.get('tags', '')
+        limit = request.args.get('limit', '50')
+        offset = request.args.get('offset', '0')
+        
+        # Build query parameters for Fish Audio API
+        params = {}
+        if query:
+            params['q'] = query
+        if language:
+            params['language'] = language
+        if tags:
+            params['tags'] = tags
+        if limit:
+            params['limit'] = limit
+        if offset:
+            params['offset'] = offset
+        
+        # Try the voices search endpoint
+        # Based on Fish Audio API documentation, try various endpoints
+        endpoints_to_try = [
+            '/v1/models',
+            '/v1/voices',
+            '/v1/voices/search',
+            '/v1/references',
+            '/models',
+            '/voices',
+            '/voices/search',
+            '/references'
+        ]
+        
+        for endpoint in endpoints_to_try:
+            try:
+                url = f'{FISH_AUDIO_BASE_URL}{endpoint}'
+                print(f"Trying endpoint: {url} with params: {params}", flush=True)
+                response = requests.get(url, headers=headers, params=params, timeout=15)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"Successfully fetched voices from {endpoint}", flush=True)
+                    return jsonify(data)
+                elif response.status_code == 404:
+                    continue  # Try next endpoint
+                else:
+                    print(f"Error from {endpoint}: {response.status_code} - {response.text}", flush=True)
+            except Exception as e:
+                print(f"Exception trying {endpoint}: {str(e)}", flush=True)
+                continue
+        
+        # If all endpoints failed, return error with 200 status so frontend can handle it
+        return jsonify({
+            'error': 'Could not find voices endpoint',
+            'message': 'Fish Audio voices API endpoint not found. Please check API documentation.',
+            'items': [],
+            'total': 0,
+            'api_unavailable': True
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in search_voices: {str(e)}", flush=True)
+        return jsonify({'error': str(e), 'items': [], 'total': 0}), 500
+
+@app.route('/list-voices', methods=['GET'])
+def list_voices():
+    """
+    Endpoint to list available voices from Fish Audio API
+    Try common endpoints to find voices
+    """
+    headers = {
+        'Authorization': f'Bearer {FISH_AUDIO_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    
+    # Try common endpoints
+    endpoints_to_try = [
+        '/v1/voices',
+        '/v1/references',
+        '/v1/voices/list',
+        '/v1/references/list',
+        '/voices',
+        '/references'
+    ]
+    
+    results = {}
+    for endpoint in endpoints_to_try:
+        try:
+            url = f'{FISH_AUDIO_BASE_URL}{endpoint}'
+            print(f"Trying endpoint: {url}", flush=True)
+            response = requests.get(url, headers=headers, timeout=10)
+            results[endpoint] = {
+                'status': response.status_code,
+                'data': response.json() if response.status_code == 200 else response.text
+            }
+        except Exception as e:
+            results[endpoint] = {'error': str(e)}
+    
+    return jsonify({
+        'message': 'Attempted to fetch voices from multiple endpoints',
+        'results': results
+    })
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Fish Audio Proxy Server Starting...")
     print("This server proxies Fish Audio API requests to avoid CORS")
     print("=" * 60)
-    print(f"Proxy URL: http://localhost:5000/tts")
-    print(f"Health Check: http://localhost:5000/health")
+    print(f"Proxy URL: http://localhost:5001/tts")
+    print(f"Health Check: http://localhost:5001/health")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

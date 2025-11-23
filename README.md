@@ -82,7 +82,7 @@ python -m http.server 8000
 
 **Why two servers?**
 - **HTTP Server (port 8000)**: Serves the web application
-- **Proxy Server (port 5000)**: Proxies Fish Audio API calls to avoid CORS restrictions
+- **Proxy Server (port 5001)**: Proxies Fish Audio API calls to avoid CORS restrictions
 
 ### Configuration
 
@@ -185,11 +185,11 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 - Wait for models to load (first time may take a moment)
 
 ### TTS not working
-- Ensure both servers are running (HTTP server on port 8000, proxy on port 5000)
+- Ensure both servers are running (HTTP server on port 8000, proxy on port 5001)
 - Check your API key in `config.js`
 - Verify API key is valid and has credits
 - Check browser console for error messages
-- Verify proxy server is running: visit `http://localhost:5000/health`
+- Verify proxy server is running: visit `http://localhost:5001/health`
 - If you see CORS errors, make sure the proxy server is running
 
 ## Why This Matters

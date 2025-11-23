@@ -315,12 +315,35 @@ button:disabled {
     color: #111827;
     word-wrap: break-word;
     line-height: 1.6;
+    white-space: pre-wrap;
 }
 
 .text-output:empty::before {
     content: 'Start typing with your nose...';
     color: #9ca3af;
     font-size: 1.2rem;
+}
+
+/* Inline Autocomplete Preview */
+.autocomplete-preview {
+    color: #9ca3af;
+    opacity: 0.6;
+    font-style: italic;
+    display: inline;
+}
+
+/* Autocomplete Button */
+.autocomplete-key {
+    background: #10b981;
+    color: white;
+    font-weight: bold;
+    font-size: 1.4rem;
+}
+
+.autocomplete-key:hover,
+.autocomplete-key.hovering {
+    background: #059669;
+    transform: scale(1.05);
 }
 
 /* Virtual Keyboard */
