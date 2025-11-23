@@ -135,15 +135,79 @@
 
                 <div class="voice-selector">
                     <h4>Voice Selection</h4>
-                    <div class="voice-options">
-                        <label class="voice-option">
-                            <input type="radio" name="voice" value="female">
-                            <span class="voice-label">👩 Female</span>
-                        </label>
-                        <label class="voice-option">
-                            <input type="radio" name="voice" value="male" checked>
-                            <span class="voice-label">👨 Male</span>
-                        </label>
+                    <div class="voice-search-wrapper">
+                        <input type="text" id="voiceSearchInput" class="voice-search-input" placeholder="Search 200,000+ voices..." autocomplete="off">
+                        <div id="voiceSearchResults" class="voice-search-results"></div>
+                    </div>
+                    <div class="voice-selected-display">
+                        <div class="selected-voice-info">
+                            <strong>Selected:</strong> <span id="selectedVoiceName">Male (Default)</span>
+                            <br><small>ID: <span id="selectedVoiceId">7d4e8a6444a442eb819c69981fdb8315</span></small>
+                        </div>
+                    </div>
+                    <div class="voice-quick-select">
+                        <button class="quick-voice-btn" data-voice-id="7d4e8a6444a442eb819c69981fdb8315" data-voice-name="Male (American)">👨 Male</button>
+                        <button class="quick-voice-btn" data-voice-id="b089032e45db460fb1934ece75a8c51d" data-voice-name="Female">👩 Female</button>
+                    </div>
+                </div>
+
+                <!-- Voice Cloning Setup -->
+                <div class="voice-cloning-section">
+                    <h4>Personal Voice</h4>
+                    <div id="voiceStatus" class="voice-status">
+                        <span id="voiceStatusText">Checking...</span>
+                        <button id="clearVoiceBtn" class="clear-voice-btn" style="display: none;">Clear Voice</button>
+                    </div>
+                    <div id="voiceSetupContainer" class="voice-setup-container">
+                        <p class="voice-instructions">Record 30 seconds of your voice or upload an audio file to create a personal voice model.</p>
+                        
+                        <!-- Toggle between record and upload -->
+                        <div class="voice-input-toggle">
+                            <button id="recordModeBtn" class="toggle-btn active">Record</button>
+                            <button id="uploadModeBtn" class="toggle-btn">Upload File</button>
+                        </div>
+                        
+                        <!-- Recording Mode -->
+                        <div id="recordingMode" class="input-mode">
+                            <div class="recording-controls">
+                                <button id="startRecordingBtn" class="record-btn">Start Recording</button>
+                                <button id="stopRecordingBtn" class="record-btn" disabled style="display: none;">Stop Recording</button>
+                            </div>
+                            <div id="recordingTimer" class="recording-timer" style="display: none;">
+                                <span id="timerDisplay">00:00</span> / 00:30
+                            </div>
+                            <div id="recordingProgress" class="recording-progress" style="display: none;">
+                                <div id="progressBar" class="progress-bar"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Upload Mode -->
+                        <div id="uploadMode" class="input-mode" style="display: none;">
+                            <div class="file-upload-container">
+                                <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+                                <label for="audioFileInput" class="file-upload-label">
+                                    <span class="upload-icon">📁</span>
+                                    <span class="upload-text">Choose Audio File</span>
+                                    <span class="upload-hint">(30 seconds recommended)</span>
+                                </label>
+                                <div id="selectedFileName" class="selected-file-name" style="display: none;"></div>
+                                <button id="uploadFileBtn" class="upload-file-btn" disabled>Upload & Create Voice</button>
+                            </div>
+                            
+                            <!-- Alternative: Manual Voice ID Entry -->
+                            <div class="manual-voice-entry">
+                                <p class="manual-entry-hint">Or enter a voice ID if you've created one in Fish Audio dashboard:</p>
+                                <div class="voice-id-input-container">
+                                    <input type="text" id="manualVoiceIdInput" class="voice-id-input" placeholder="Enter voice ID (reference_id)">
+                                    <button id="saveVoiceIdBtn" class="save-voice-id-btn">Save Voice ID</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Upload Status (shared between both modes) -->
+                        <div id="uploadStatus" class="upload-status" style="display: none;">
+                            <p id="uploadStatusText">Uploading and creating voice model...</p>
+                        </div>
                     </div>
                 </div>
             </div>

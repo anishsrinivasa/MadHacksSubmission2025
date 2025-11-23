@@ -289,6 +289,423 @@ button:disabled {
     font-weight: 600;
 }
 
+/* Voice Search Styles */
+.voice-search-wrapper {
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.voice-search-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
+    box-sizing: border-box;
+}
+
+.voice-search-input:focus {
+    outline: none;
+    border-color: white;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.voice-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.voice-search-result-item {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.voice-search-result-item:hover,
+.voice-search-result-item.highlighted {
+    background: #f3f4f6;
+}
+
+.voice-search-result-item:last-child {
+    border-bottom: none;
+}
+
+.voice-result-title {
+    font-weight: 600;
+    color: #111827;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.voice-result-tags {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.voice-search-loading,
+.voice-search-empty,
+.voice-search-error {
+    padding: 12px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.voice-search-error {
+    color: #ef4444;
+}
+
+.voice-selected-display {
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+}
+
+.selected-voice-info {
+    font-size: 13px;
+    color: white;
+}
+
+.selected-voice-info strong {
+    opacity: 0.9;
+}
+
+.selected-voice-info small {
+    display: block;
+    margin-top: 4px;
+    opacity: 0.8;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+.voice-quick-select {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.quick-voice-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.quick-voice-btn:hover,
+.quick-voice-btn.nose-hovering {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.voice-search-result-item.nose-hovering {
+    background: #f3f4f6;
+}
+
+/* Voice Cloning Section */
+.voice-cloning-section {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 15px;
+    color: white;
+}
+
+.voice-cloning-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.voice-status {
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.clear-voice-btn {
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 2px solid rgba(239, 68, 68, 0.8);
+    border-radius: 6px;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.clear-voice-btn:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 1);
+    transform: translateY(-2px);
+}
+
+.clear-voice-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.voice-setup-container {
+    margin-top: 15px;
+}
+
+.voice-instructions {
+    font-size: 0.85rem;
+    text-align: center;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.voice-input-toggle {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.toggle-btn {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid transparent;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.toggle-btn.active {
+    background: rgba(255, 255, 255, 0.4);
+    border-color: white;
+}
+
+.input-mode {
+    margin-top: 10px;
+}
+
+.recording-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.record-btn {
+    padding: 10px 15px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.record-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.record-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.recording-timer {
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 10px 0;
+}
+
+.recording-progress {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: white;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.file-upload-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.file-upload-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px dashed white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.file-upload-label:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.upload-icon {
+    font-size: 2rem;
+    margin-bottom: 5px;
+}
+
+.upload-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.upload-hint {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-top: 5px;
+}
+
+.selected-file-name {
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+}
+
+.upload-file-btn {
+    padding: 10px 15px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-file-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.upload-file-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.manual-voice-entry {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.manual-entry-hint {
+    font-size: 0.8rem;
+    text-align: center;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.voice-id-input-container {
+    display: flex;
+    gap: 8px;
+}
+
+.voice-id-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+}
+
+.voice-id-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.save-voice-id-btn {
+    padding: 8px 15px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.save-voice-id-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.save-voice-id-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.upload-status {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.upload-status p {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
 /* Text Display */
 .text-display {
     background: #f9fafb;

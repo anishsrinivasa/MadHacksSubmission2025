@@ -26,16 +26,35 @@ This app uses your webcam for **two things simultaneously**:
 - If you select "No" while **frowning** → it sends `(angry) No`
 - The result? **Natural, expressive speech that actually conveys feeling**
 
-### Bonus: Voice Cloning
-Use voice cloning so it sounds like you (from before you lost your voice), not a generic robot.
+### Voice Options
+
+**Three Ways to Choose Your Voice:**
+
+1. **Personal Voice Cloning** (Recommended for personal use)
+   - Record 30 seconds of your voice directly in the browser
+   - Or upload an audio file (30 seconds recommended)
+   - Creates a personalized voice model that sounds like you
+   - Perfect for users who want to preserve their original voice
+
+2. **Voice Search & Browser** (Explore 200,000+ voices)
+   - Search by name, tags, or characteristics
+   - Browse through a massive library of voices
+   - Select any voice that matches your preference
+   - Great for trying different voices or finding specific character voices
+
+3. **Quick Select** (Fast default options)
+   - One-click selection of Male or Female voices
+   - Perfect for quick setup or testing
 
 ## Features
 
 - **Nose Tracking**: Navigate and type using only nose movements - perfect for users with motor impairments
 - **ML-Based Real-time Emotion Detection**: Uses machine learning models (face-api.js) to automatically detect facial expressions (happy, sad, angry, surprised, neutral)
 - **Expressive Text-to-Speech**: Converts typed text to speech with emotion modulation using Fish Audio API
-- **Voice Cloning Support**: Optional voice cloning to sound like your original voice
-- **Dwell Selection**: Hover over keys for 0.5 seconds to select (configurable)
+- **Voice Search & Browser**: Search and select from 200,000+ voices using an autocomplete search interface with keyboard navigation
+- **Personal Voice Cloning**: Record or upload 30 seconds of audio to create your own personalized voice model
+- **Voice Management**: Clear your personal voice anytime and switch between personal, searched, or default voices
+- **Dwell Selection**: Hover over keys for 0.5 seconds to select (configurable) - works with keyboard, buttons, and voice search results
 - **Privacy-First**: All face processing happens client-side in your browser
 
 ## Quick Start
@@ -82,21 +101,27 @@ python -m http.server 8000
 
 **Why two servers?**
 - **HTTP Server (port 8000)**: Serves the web application
-- **Proxy Server (port 5001)**: Proxies Fish Audio API calls to avoid CORS restrictions
+- **Proxy Server (port 5001)**: 
+  - Proxies Fish Audio API calls to avoid CORS restrictions
+  - Provides voice search endpoint using Fish Audio Python SDK
+  - Handles voice cloning (create, status, clear) endpoints
+  - Manages voice storage for personal voices
 
 ### Configuration
 
-1. Create a `config.js` file in the root directory:
-```javascript
-const CONFIG = {
-    FISH_AUDIO_API_KEY: 'your_api_key_here',
-    FISH_AUDIO_API_URL: 'https://api.fishaudio.com/v1/text-to-speech',
-    VOICE_ID: '', // Optional: cloned voice ID
-    DWELL_TIME: 500 // milliseconds (0.5 seconds)
-};
+1. The `config.js` file is already included with default settings. The API key is configured in `proxy.py`.
+
+2. Get your Fish Audio API key from [Fish Audio](https://fishaudio.com) and update it in `proxy.py`:
+```python
+FISH_AUDIO_API_KEY = 'your_api_key_here'
 ```
 
-2. Get your Fish Audio API key from [Fish Audio](https://fishaudio.com)
+3. Install Python dependencies (includes Fish Audio SDK for voice search):
+```bash
+pip install -r requirements.txt
+```
+
+**Note**: The Fish Audio Python SDK (`fish-audio-sdk`) is required for voice search functionality. If not installed, the system will fall back to REST API calls.
 
 ## How It Works
 
@@ -104,11 +129,22 @@ const CONFIG = {
 
 1. **Start the Camera**: Click the "Start Camera" button and allow camera permissions
 2. **Position Yourself**: Sit in front of your webcam with good lighting
-3. **Navigate**: Move your nose to hover over keys on the virtual keyboard
-4. **Select Keys**: Hold your nose over a key for 0.5 seconds to select it
-5. **Type Your Message**: Build your text using the keyboard
-6. **Express Emotion**: Your facial expressions are detected in real-time (shown in sidebar)
-7. **Speak**: Click "SPEAK" to convert your text to speech with emotion modulation
+3. **Select a Voice** (optional):
+   - **Search for a voice**: Type in the voice search box to browse 200,000+ voices
+   - **Quick select**: Use the Male/Female quick-select buttons
+   - **Create personal voice**: Record 30 seconds or upload an audio file in the "Personal Voice" section
+4. **Navigate**: Move your nose to hover over keys on the virtual keyboard
+5. **Select Keys**: Hold your nose over a key for 0.5 seconds to select it
+6. **Type Your Message**: Build your text using the keyboard
+7. **Express Emotion**: Your facial expressions are detected in real-time (shown in sidebar)
+8. **Speak**: Click "SPEAK" to convert your text to speech with emotion modulation using your selected voice
+
+### Voice Selection Priority
+
+The app uses voices in this order:
+1. **Personal Voice** (if you've created one) - Your own cloned voice
+2. **Selected Voice from Search** - Any voice you've selected from the 200k+ voice library
+3. **Default Voice** - Falls back to Male (American) if nothing is selected
 
 ### How ML-Based Emotion Detection Works
 
@@ -131,6 +167,8 @@ The ML models run entirely in your browser, processing facial landmarks and expr
 - **MediaPipe Face Mesh**: Nose tracking and facial landmark detection
 - **face-api.js**: ML-based real-time emotion recognition from facial expressions (uses TinyFaceDetector and FaceExpressionNet models)
 - **Fish Audio API**: Expressive text-to-speech with emotion modulation
+- **Fish Audio Python SDK**: Voice search and browsing functionality (200k+ voices)
+- **Flask**: Python proxy server for API calls and voice cloning endpoints
 - **Vanilla JavaScript**: No framework dependencies - lightweight and fast
 
 ## Project Structure
@@ -138,12 +176,13 @@ The ML models run entirely in your browser, processing facial landmarks and expr
 ```
 MadHacksSubmission2025/
 ├── index.html          # Main HTML file
-├── app.js              # Core application logic (nose tracking, emotion detection, TTS)
-├── config.js           # Configuration (API keys, voice settings, emotion parameters)
+├── app.js              # Core application logic (nose tracking, emotion detection, TTS, voice search)
+├── config.js           # Configuration (voice settings, emotion parameters)
 ├── style.css           # Styling
-├── proxy.py            # Fish Audio API proxy server (solves CORS)
-├── requirements.txt    # Python dependencies for proxy server
+├── proxy.py            # Fish Audio API proxy server (CORS, voice search, voice cloning)
+├── requirements.txt    # Python dependencies (Flask, Fish Audio SDK, Pillow)
 ├── start.bat           # Startup script (Windows) - runs both servers
+├── voice_storage.json  # Local storage for personal voice IDs (auto-generated)
 └── README.md           # This file
 ```
 
@@ -186,11 +225,24 @@ emotionDetectionInterval = setInterval(detectEmotion, 100); // Adjust interval (
 
 ### TTS not working
 - Ensure both servers are running (HTTP server on port 8000, proxy on port 5001)
-- Check your API key in `config.js`
+- Check your API key in `proxy.py`
 - Verify API key is valid and has credits
 - Check browser console for error messages
 - Verify proxy server is running: visit `http://localhost:5001/health`
 - If you see CORS errors, make sure the proxy server is running
+
+### Voice search not working
+- Ensure Fish Audio Python SDK is installed: `pip install fish-audio-sdk`
+- Check proxy server console for SDK initialization messages
+- The system will fall back to REST API if SDK is not available
+- Verify your API key has access to voice search features
+
+### Voice cloning not working
+- Ensure Pillow is installed: `pip install Pillow` (required for cover image generation)
+- Check that you're recording/uploading at least 30 seconds of audio
+- Verify audio file format is supported (WebM, MP3, WAV)
+- Check proxy server console for detailed error messages
+- Ensure microphone permissions are granted if recording
 
 ## Why This Matters
 

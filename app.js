@@ -17,13 +17,22 @@ const emotionIcon = document.getElementById('emotionIcon');
 const emotionLabel = document.getElementById('emotionLabel');
 const confidenceFill = document.getElementById('confidenceFill');
 const confidenceText = document.getElementById('confidenceText');
-const voiceRadios = document.querySelectorAll('input[name="voice"]');
+// Voice search elements
+const voiceSearchInput = document.getElementById('voiceSearchInput');
+const voiceSearchResults = document.getElementById('voiceSearchResults');
+const selectedVoiceNameSpan = document.getElementById('selectedVoiceName');
+const selectedVoiceIdSpan = document.getElementById('selectedVoiceId');
 
 // State
 let camera = null;
 let faceMesh = null;
 let isTracking = false;
-let selectedVoice = 'male'; // Default voice selection (American)
+let selectedVoice = 'male'; // Default voice selection (American) - kept for backward compatibility
+let selectedVoiceId = '7d4e8a6444a442eb819c69981fdb8315'; // Default: Male voice reference ID
+let selectedVoiceName = 'Male (American)'; // Default voice name
+let searchDebounceTimer = null;
+let currentSearchResults = [];
+let selectedResultIndex = -1;
 
 // face-api.js model state
 let emotionModelsLoaded = false;
@@ -151,6 +160,42 @@ let dwellTimeout = null;
 
 // Emotion state
 let currentEmotion = 'neutral';
+
+// ========== VOICE CLONING FUNCTIONALITY ==========
+// Voice cloning state
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingStartTime = null;
+let recordingTimerInterval = null;
+let userVoiceId = null;
+const RECORDING_DURATION = 30000; // 30 seconds in milliseconds
+const USER_ID = localStorage.getItem('userId') || `user_${Date.now()}`;
+
+// Store user ID in localStorage
+localStorage.setItem('userId', USER_ID);
+
+// DOM elements for voice cloning
+const voiceStatusText = document.getElementById('voiceStatusText');
+const voiceSetupContainer = document.getElementById('voiceSetupContainer');
+const clearVoiceBtn = document.getElementById('clearVoiceBtn');
+const startRecordingBtn = document.getElementById('startRecordingBtn');
+const stopRecordingBtn = document.getElementById('stopRecordingBtn');
+const recordingTimer = document.getElementById('recordingTimer');
+const timerDisplay = document.getElementById('timerDisplay');
+const recordingProgress = document.getElementById('recordingProgress');
+const progressBar = document.getElementById('progressBar');
+const uploadStatus = document.getElementById('uploadStatus');
+const uploadStatusText = document.getElementById('uploadStatusText');
+
+// File upload elements
+const recordModeBtn = document.getElementById('recordModeBtn');
+const uploadModeBtn = document.getElementById('uploadModeBtn');
+const recordingMode = document.getElementById('recordingMode');
+const uploadMode = document.getElementById('uploadMode');
+const audioFileInput = document.getElementById('audioFileInput');
+const selectedFileName = document.getElementById('selectedFileName');
+const uploadFileBtn = document.getElementById('uploadFileBtn');
+let selectedAudioFile = null;
 
 // Speak cooldown state (prevents spam)
 let speakCooldown = false;
@@ -767,8 +812,10 @@ function checkElementHover() {
             foundElement = element;
             break;
         }
-        // Check for voice selector labels
-        if (element.classList.contains('voice-option')) {
+        // Check for voice selector labels, voice search results, and quick voice buttons
+        if (element.classList.contains('voice-option') || 
+            element.classList.contains('voice-search-result-item') ||
+            element.classList.contains('quick-voice-btn')) {
             foundElement = element;
             break;
         }
@@ -902,6 +949,20 @@ function selectElement(element) {
             radioInput.checked = true;
             selectedVoice = radioInput.value;
             console.log(`Voice changed to: ${selectedVoice} (via nose selection)`);
+        }
+    } else if (element.classList.contains('voice-search-result-item')) {
+        // Voice search result selected
+        const index = parseInt(element.getAttribute('data-index'));
+        if (index >= 0 && currentSearchResults[index]) {
+            const voice = currentSearchResults[index];
+            selectVoice(voice.id, voice.title, voice.tags);
+        }
+    } else if (element.classList.contains('quick-voice-btn')) {
+        // Quick voice button selected
+        const voiceId = element.getAttribute('data-voice-id');
+        const voiceName = element.getAttribute('data-voice-name');
+        if (voiceId && voiceName) {
+            selectVoice(voiceId, voiceName, []);
         }
     }
 
@@ -1238,23 +1299,27 @@ async function speakText(text, emotion) {
             throw new Error('CONFIG not loaded. Please refresh the page.');
         }
 
-        // Get selected voice reference ID (male/female)
-        const voiceReferenceId = CONFIG.VOICE_REFERENCES[selectedVoice];
+        // Priority: Use cloned voice if available, otherwise use selected voice from search
+        let voiceReferenceId;
+        if (userVoiceId) {
+            voiceReferenceId = userVoiceId;
+            console.log('Using cloned personal voice:', userVoiceId);
+        } else {
+            // Use selected voice from search (or fallback to male/female)
+            voiceReferenceId = selectedVoiceId || CONFIG.VOICE_REFERENCES[selectedVoice];
+            console.log('Using selected voice from search:', selectedVoiceId || selectedVoice);
+        }
 
         // Validate voice reference ID exists
         if (!voiceReferenceId) {
-            const availableVoices = Object.keys(CONFIG.VOICE_REFERENCES).join(', ');
-            console.error(`Voice reference ID not found for voice: "${selectedVoice}"`);
-            console.error(`Available voices: ${availableVoices}`);
-            console.error(`CONFIG.VOICE_REFERENCES:`, CONFIG.VOICE_REFERENCES);
-            throw new Error(`Voice reference ID not found for voice: ${selectedVoice}. Available voices: ${availableVoices}`);
+            throw new Error('No voice selected. Please select a voice from the search or set up a personal voice.');
         }
 
         // Debug logging
         console.log('=== Fish Audio TTS Request ===');
         console.log('Text:', text);
         console.log('Emotion:', emotion);
-        console.log('Selected Voice:', selectedVoice);
+        console.log('Selected Voice Name:', selectedVoiceName);
         console.log('Voice Reference ID:', voiceReferenceId);
         console.log('Speed (from emotion):', voiceParams.speed);
         console.log('Volume (from emotion):', voiceParams.volume);
@@ -1268,14 +1333,15 @@ async function speakText(text, emotion) {
         // Speed and volume must be nested inside 'prosody' object
         const requestBody = {
             text: processedText,  // Text with numbers converted to words
-            reference_id: voiceReferenceId, // Male or Female voice
+            reference_id: voiceReferenceId, // Cloned voice, searched voice, or default
             format: 'mp3',
             mp3_bitrate: 128,
             normalize: true,
             prosody: {
                 speed: voiceParams.speed || 1.0,  // Speech speed multiplier (0.5-2.0)
                 volume: voiceParams.volume || 0   // Volume adjustment in dB
-            }
+            },
+            user_id: USER_ID  // Include user ID for voice cloning lookup
         };
 
         console.log('Request Body:', JSON.stringify(requestBody, null, 2));
@@ -1555,14 +1621,8 @@ function stopTracking() {
 startBtn.addEventListener('click', startTracking);
 stopBtn.addEventListener('click', stopTracking);
 
-// Voice selection event listeners
-// Voice selection event listeners
-voiceRadios.forEach(radio => {
-    radio.addEventListener('change', (e) => {
-        selectedVoice = e.target.value;
-        console.log(`Voice changed to: ${selectedVoice}`);
-    });
-});
+// Voice selection is now handled by voice search functionality
+// Old radio button listeners removed - using voice search instead
 
 // Add mouse hover and click support to keyboard keys for testing
 let mouseHoveredKey = null;
@@ -1630,6 +1690,646 @@ if (autocompleteBtn) {
     autocompleteBtn.style.opacity = '0.4';
     autocompleteBtn.style.cursor = 'not-allowed';
 }
+
+// ========== VOICE CLONING FUNCTIONS ==========
+// Check voice status on page load
+async function checkVoiceStatus() {
+    if (!voiceStatusText) return; // Skip if elements don't exist
+    
+    // Show setup container by default (will be hidden if voice exists)
+    if (voiceSetupContainer) {
+        voiceSetupContainer.style.display = 'block';
+    }
+    
+    try {
+        const response = await fetch(`http://localhost:5001/api/voice-status?user_id=${encodeURIComponent(USER_ID)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Voice status response:', data);
+        
+        if (data.has_voice && data.voice_id) {
+            userVoiceId = data.voice_id;
+            voiceStatusText.textContent = '✅ Personal Voice Activated';
+            voiceStatusText.style.color = '#10b981';
+            if (voiceSetupContainer) voiceSetupContainer.style.display = 'none';
+            if (clearVoiceBtn) clearVoiceBtn.style.display = 'inline-block';
+        } else {
+            userVoiceId = null;
+            voiceStatusText.textContent = '⚠️ Voice Model Not Setup';
+            voiceStatusText.style.color = '#f59e0b';
+            if (voiceSetupContainer) voiceSetupContainer.style.display = 'block';
+            if (clearVoiceBtn) clearVoiceBtn.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking voice status:', error);
+        if (voiceStatusText) {
+            voiceStatusText.textContent = '⚠️ Voice Model Not Setup (Click to set up)';
+            voiceStatusText.style.color = '#f59e0b';
+        }
+        if (voiceSetupContainer) voiceSetupContainer.style.display = 'block';
+    }
+}
+
+// Start recording
+async function startRecording() {
+    if (!startRecordingBtn) return;
+    
+    try {
+        // Request microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Create MediaRecorder
+        mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus'
+        });
+        
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = async () => {
+            // Stop all tracks
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Create audio blob
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            
+            // Upload and create voice model
+            await uploadAndCreateVoice(audioBlob);
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        recordingStartTime = Date.now();
+        
+        // Update UI
+        if (startRecordingBtn) startRecordingBtn.style.display = 'none';
+        if (stopRecordingBtn) {
+            stopRecordingBtn.style.display = 'inline-block';
+            stopRecordingBtn.disabled = false;
+        }
+        if (recordingTimer) recordingTimer.style.display = 'block';
+        if (recordingProgress) recordingProgress.style.display = 'block';
+        
+        // Start timer
+        updateTimer();
+        recordingTimerInterval = setInterval(updateTimer, 100);
+        
+        // Auto-stop after 30 seconds
+        setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            }
+        }, RECORDING_DURATION);
+        
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        alert('Failed to start recording. Please allow microphone access.');
+    }
+}
+
+// Stop recording
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        
+        // Clear timer
+        if (recordingTimerInterval) {
+            clearInterval(recordingTimerInterval);
+            recordingTimerInterval = null;
+        }
+        
+        // Update UI
+        if (stopRecordingBtn) {
+            stopRecordingBtn.disabled = true;
+            stopRecordingBtn.textContent = 'Processing...';
+        }
+    }
+}
+
+// Update recording timer
+function updateTimer() {
+    if (!recordingStartTime || !timerDisplay) return;
+    
+    const elapsed = Date.now() - recordingStartTime;
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const displaySeconds = seconds % 60;
+    
+    timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(displaySeconds).padStart(2, '0')}`;
+    
+    // Update progress bar
+    if (progressBar) {
+        const progress = Math.min((elapsed / RECORDING_DURATION) * 100, 100);
+        progressBar.style.width = `${progress}%`;
+    }
+    
+    // Auto-stop at 30 seconds
+    if (elapsed >= RECORDING_DURATION) {
+        stopRecording();
+    }
+}
+
+// Upload audio and create voice model
+async function uploadAndCreateVoice(audioBlobOrFile) {
+    if (!uploadStatus || !uploadStatusText) return;
+    
+    uploadStatus.style.display = 'block';
+    uploadStatusText.textContent = 'Uploading audio and creating voice model...';
+    
+    const formData = new FormData();
+    
+    // Handle both Blob (from recording) and File (from file input)
+    if (audioBlobOrFile instanceof File) {
+        formData.append('audio_file', audioBlobOrFile);
+    } else {
+        formData.append('audio_file', audioBlobOrFile, 'voice_recording.webm');
+    }
+    
+    formData.append('user_id', USER_ID);
+    
+    const maxRetries = 3;
+    let retryDelay = 1;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            uploadStatusText.textContent = `Uploading... (Attempt ${attempt + 1}/${maxRetries})`;
+            
+            const response = await fetch('http://localhost:5001/api/create-voice', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.voice_id) {
+                userVoiceId = data.voice_id;
+                uploadStatusText.textContent = '✅ Voice model created successfully!';
+                uploadStatusText.style.color = '#10b981';
+                
+                // Update voice status
+                setTimeout(() => {
+                    checkVoiceStatus();
+                    uploadStatus.style.display = 'none';
+                }, 2000);
+                
+                return;
+            } else {
+                throw new Error('Voice creation failed: ' + (data.message || 'Unknown error'));
+            }
+            
+        } catch (error) {
+            console.error(`Attempt ${attempt + 1} failed:`, error);
+            
+            if (attempt < maxRetries - 1) {
+                const waitTime = retryDelay * Math.pow(2, attempt);
+                uploadStatusText.textContent = `Error: ${error.message}. Retrying in ${waitTime}s...`;
+                await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+            } else {
+                uploadStatusText.textContent = `❌ Failed to create voice model: ${error.message}`;
+                uploadStatusText.style.color = '#ef4444';
+                if (stopRecordingBtn) {
+                    stopRecordingBtn.textContent = 'Try Again';
+                    stopRecordingBtn.disabled = false;
+                }
+                if (uploadFileBtn) {
+                    uploadFileBtn.textContent = 'Upload & Create Voice';
+                    uploadFileBtn.disabled = false;
+                }
+            }
+        }
+    }
+}
+
+// Toggle between record and upload modes
+function switchToRecordMode() {
+    if (!recordModeBtn || !uploadModeBtn || !recordingMode || !uploadMode) return;
+    
+    recordModeBtn.classList.add('active');
+    uploadModeBtn.classList.remove('active');
+    recordingMode.style.display = 'block';
+    uploadMode.style.display = 'none';
+    selectedAudioFile = null;
+    if (audioFileInput) audioFileInput.value = '';
+    if (selectedFileName) selectedFileName.style.display = 'none';
+    if (uploadFileBtn) uploadFileBtn.disabled = true;
+}
+
+function switchToUploadMode() {
+    if (!recordModeBtn || !uploadModeBtn || !recordingMode || !uploadMode) return;
+    
+    uploadModeBtn.classList.add('active');
+    recordModeBtn.classList.remove('active');
+    uploadMode.style.display = 'block';
+    recordingMode.style.display = 'none';
+}
+
+// Event listeners for voice cloning (only if elements exist)
+if (recordModeBtn) recordModeBtn.addEventListener('click', switchToRecordMode);
+if (uploadModeBtn) uploadModeBtn.addEventListener('click', switchToUploadMode);
+if (startRecordingBtn) startRecordingBtn.addEventListener('click', startRecording);
+if (stopRecordingBtn) stopRecordingBtn.addEventListener('click', stopRecording);
+
+// Handle file selection
+if (audioFileInput) {
+    audioFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (!file.type.startsWith('audio/')) {
+                alert('Please select an audio file.');
+                audioFileInput.value = '';
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File is too large. Maximum size is 10MB.');
+                audioFileInput.value = '';
+                return;
+            }
+            
+            selectedAudioFile = file;
+            if (selectedFileName) {
+                selectedFileName.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                selectedFileName.style.display = 'block';
+            }
+            if (uploadFileBtn) uploadFileBtn.disabled = false;
+        }
+    });
+}
+
+// Handle file upload
+if (uploadFileBtn) {
+    uploadFileBtn.addEventListener('click', async () => {
+        if (!selectedAudioFile) {
+            alert('Please select an audio file first.');
+            return;
+        }
+        
+        uploadFileBtn.disabled = true;
+        uploadFileBtn.textContent = 'Uploading...';
+        
+        await uploadAndCreateVoice(selectedAudioFile);
+        
+        uploadFileBtn.textContent = 'Upload & Create Voice';
+        uploadFileBtn.disabled = false;
+    });
+}
+
+// Manual Voice ID Entry
+const manualVoiceIdInput = document.getElementById('manualVoiceIdInput');
+const saveVoiceIdBtn = document.getElementById('saveVoiceIdBtn');
+
+if (saveVoiceIdBtn) {
+    saveVoiceIdBtn.addEventListener('click', async () => {
+        if (!manualVoiceIdInput) return;
+        
+        const voiceId = manualVoiceIdInput.value.trim();
+        
+        if (!voiceId) {
+            alert('Please enter a voice ID.');
+            return;
+        }
+        
+        if (voiceId.length < 10) {
+            alert('Voice ID seems too short. Please check and try again.');
+            return;
+        }
+        
+        saveVoiceIdBtn.disabled = true;
+        saveVoiceIdBtn.textContent = 'Saving...';
+        
+        try {
+            userVoiceId = voiceId;
+            
+            const response = await fetch(`http://localhost:5001/api/save-voice-id`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: USER_ID,
+                    voice_id: voiceId
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    if (uploadStatus && uploadStatusText) {
+                        uploadStatus.style.display = 'block';
+                        uploadStatusText.textContent = '✅ Voice ID saved successfully!';
+                        uploadStatusText.style.color = '#10b981';
+                    }
+                    
+                    setTimeout(() => {
+                        checkVoiceStatus();
+                        if (uploadStatus) uploadStatus.style.display = 'none';
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || 'Failed to save voice ID');
+                }
+            } else {
+                const errorText = await response.text();
+                throw new Error(`Server error: ${errorText}`);
+            }
+        } catch (error) {
+            console.error('Error saving voice ID:', error);
+            if (uploadStatus && uploadStatusText) {
+                uploadStatus.style.display = 'block';
+                uploadStatusText.textContent = `❌ Failed to save voice ID: ${error.message}`;
+                uploadStatusText.style.color = '#ef4444';
+            }
+        } finally {
+            saveVoiceIdBtn.disabled = false;
+            saveVoiceIdBtn.textContent = 'Save Voice ID';
+        }
+    });
+}
+
+// Clear personal voice
+async function clearPersonalVoice() {
+    if (!clearVoiceBtn) return;
+    
+    // Confirm action
+    if (!confirm('Are you sure you want to clear your personal voice? You will need to record or upload a new voice to use personal voice again.')) {
+        return;
+    }
+    
+    clearVoiceBtn.disabled = true;
+    clearVoiceBtn.textContent = 'Clearing...';
+    
+    try {
+        const response = await fetch(`http://localhost:5001/api/clear-voice`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: USER_ID
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                userVoiceId = null;
+                
+                // Update UI
+                if (voiceStatusText) {
+                    voiceStatusText.textContent = '⚠️ Voice Model Not Setup';
+                    voiceStatusText.style.color = '#f59e0b';
+                }
+                if (voiceSetupContainer) voiceSetupContainer.style.display = 'block';
+                if (clearVoiceBtn) clearVoiceBtn.style.display = 'none';
+                
+                // Show success message
+                if (uploadStatus && uploadStatusText) {
+                    uploadStatus.style.display = 'block';
+                    uploadStatusText.textContent = '✅ Personal voice cleared successfully';
+                    uploadStatusText.style.color = '#10b981';
+                    
+                    setTimeout(() => {
+                        uploadStatus.style.display = 'none';
+                    }, 3000);
+                }
+            } else {
+                throw new Error(data.message || 'Failed to clear voice');
+            }
+        } else {
+            const errorText = await response.text();
+            throw new Error(`Server error: ${errorText}`);
+        }
+    } catch (error) {
+        console.error('Error clearing voice:', error);
+        alert(`Failed to clear personal voice: ${error.message}`);
+    } finally {
+        if (clearVoiceBtn) {
+            clearVoiceBtn.disabled = false;
+            clearVoiceBtn.textContent = 'Clear Voice';
+        }
+    }
+}
+
+// Event listener for clear voice button
+if (clearVoiceBtn) {
+    clearVoiceBtn.addEventListener('click', clearPersonalVoice);
+}
+
+// ========== VOICE SEARCH FUNCTIONALITY ==========
+// Voice search functionality
+async function searchVoices(query) {
+    if (!voiceSearchResults) return;
+    
+    if (!query || query.trim().length < 2) {
+        voiceSearchResults.innerHTML = '';
+        voiceSearchResults.style.display = 'none';
+        return;
+    }
+
+    try {
+        voiceSearchResults.innerHTML = '<div class="voice-search-loading">Searching...</div>';
+        voiceSearchResults.style.display = 'block';
+
+        const url = `http://localhost:5001/search-voices?title=${encodeURIComponent(query)}`;
+        console.log('Searching voices:', url);
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.error || !data.items || data.items.length === 0) {
+            voiceSearchResults.innerHTML = '<div class="voice-search-empty">No voices found. Try a different search.</div>';
+            currentSearchResults = [];
+            return;
+        }
+
+        currentSearchResults = data.items;
+        selectedResultIndex = -1;
+
+        // Display results
+        voiceSearchResults.innerHTML = '';
+        data.items.forEach((voice, index) => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'voice-search-result-item';
+            resultItem.setAttribute('data-index', index);
+            
+            const voiceTitle = document.createElement('div');
+            voiceTitle.className = 'voice-result-title';
+            voiceTitle.textContent = voice.title || 'Unnamed Voice';
+            
+            const voiceTags = document.createElement('div');
+            voiceTags.className = 'voice-result-tags';
+            if (voice.tags && Array.isArray(voice.tags) && voice.tags.length > 0) {
+                voiceTags.textContent = voice.tags.join(', ');
+                resultItem.appendChild(voiceTitle);
+                resultItem.appendChild(voiceTags);
+            } else if (voice.tags && typeof voice.tags === 'string' && voice.tags.trim()) {
+                voiceTags.textContent = voice.tags;
+                resultItem.appendChild(voiceTitle);
+                resultItem.appendChild(voiceTags);
+            } else {
+                // Don't show tags element if there are no tags
+                resultItem.appendChild(voiceTitle);
+            }
+            
+            resultItem.addEventListener('click', () => {
+                selectVoice(voice.id, voice.title, voice.tags);
+            });
+            
+            resultItem.addEventListener('mouseenter', () => {
+                selectedResultIndex = index;
+                updateResultHighlight();
+            });
+            
+            voiceSearchResults.appendChild(resultItem);
+        });
+
+    } catch (error) {
+        console.error('Error searching voices:', error);
+        if (voiceSearchResults) {
+            voiceSearchResults.innerHTML = '<div class="voice-search-error">Error searching voices. Please try again.</div>';
+        }
+        currentSearchResults = [];
+    }
+}
+
+function updateResultHighlight() {
+    if (!voiceSearchResults) return;
+    const items = voiceSearchResults.querySelectorAll('.voice-search-result-item');
+    items.forEach((item, index) => {
+        if (index === selectedResultIndex) {
+            item.classList.add('highlighted');
+        } else {
+            item.classList.remove('highlighted');
+        }
+    });
+}
+
+function selectVoice(voiceId, voiceName, tags) {
+    selectedVoiceId = voiceId;
+    selectedVoiceName = voiceName || 'Selected Voice';
+    
+    if (selectedVoiceNameSpan) {
+        selectedVoiceNameSpan.textContent = selectedVoiceName;
+    }
+    if (selectedVoiceIdSpan) {
+        selectedVoiceIdSpan.textContent = voiceId;
+    }
+    
+    // Close search results
+    if (voiceSearchResults) {
+        voiceSearchResults.style.display = 'none';
+    }
+    if (voiceSearchInput) {
+        voiceSearchInput.value = '';
+    }
+    
+    console.log(`Voice selected: ${voiceName} (${voiceId})`);
+}
+
+// Debounced search function
+function debouncedSearch(query) {
+    if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+    }
+    
+    searchDebounceTimer = setTimeout(() => {
+        searchVoices(query);
+    }, 300);
+}
+
+// Voice search input event listeners
+if (voiceSearchInput) {
+    voiceSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        if (query.length >= 2) {
+            debouncedSearch(query);
+        } else {
+            if (voiceSearchResults) {
+                voiceSearchResults.style.display = 'none';
+            }
+            currentSearchResults = [];
+        }
+    });
+
+    voiceSearchInput.addEventListener('focus', () => {
+        if (voiceSearchResults && currentSearchResults.length > 0) {
+            voiceSearchResults.style.display = 'block';
+        }
+    });
+
+    voiceSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (selectedResultIndex < currentSearchResults.length - 1) {
+                selectedResultIndex++;
+                updateResultHighlight();
+                if (voiceSearchResults) {
+                    const items = voiceSearchResults.querySelectorAll('.voice-search-result-item');
+                    if (items[selectedResultIndex]) {
+                        items[selectedResultIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (selectedResultIndex > 0) {
+                selectedResultIndex--;
+                updateResultHighlight();
+                if (voiceSearchResults) {
+                    const items = voiceSearchResults.querySelectorAll('.voice-search-result-item');
+                    if (items[selectedResultIndex]) {
+                        items[selectedResultIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                }
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedResultIndex >= 0 && currentSearchResults[selectedResultIndex]) {
+                const voice = currentSearchResults[selectedResultIndex];
+                selectVoice(voice.id, voice.title, voice.tags);
+            }
+        } else if (e.key === 'Escape') {
+            if (voiceSearchResults) {
+                voiceSearchResults.style.display = 'none';
+            }
+        }
+    });
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', (e) => {
+    if (voiceSearchInput && voiceSearchResults && 
+        !voiceSearchInput.contains(e.target) && 
+        !voiceSearchResults.contains(e.target)) {
+        voiceSearchResults.style.display = 'none';
+    }
+});
+
+// Quick voice selection buttons
+const quickVoiceButtons = document.querySelectorAll('.quick-voice-btn');
+quickVoiceButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const voiceId = btn.getAttribute('data-voice-id');
+        const voiceName = btn.getAttribute('data-voice-name');
+        selectVoice(voiceId, voiceName, []);
+    });
+});
+
+// Check voice status on page load
+checkVoiceStatus();
 
 // Initialize
 status.textContent = 'Click "Start Camera" to begin';
