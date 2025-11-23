@@ -1131,12 +1131,19 @@ export default function App() {
           // Start progress simulation
           progressIntervalRef.current = window.setInterval(() => {
             setUploadProgress((prev) => {
-              if (prev >= 90) return 90; // Stop at 90% until done
-              return prev + Math.random() * 15 + 5; // Increment by 5-20%
+              if (prev >= 95) return 95; // Stop at 95% until done
+              return prev + Math.random() * 3 + 1; // Increment by 1-4% (slower)
             });
-          }, 500);
+          }, 800); // Slower interval
           
           const voiceId = await uploadVoiceAsset(blob, profileId);
+          
+          // Clear interval before setting to 100%
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
+          
           setUploadProgress(100);
           await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause at 100%
           
@@ -1208,12 +1215,19 @@ export default function App() {
       // Start progress simulation
       progressIntervalRef.current = window.setInterval(() => {
         setUploadProgress((prev) => {
-          if (prev >= 90) return 90; // Stop at 90% until done
-          return prev + Math.random() * 15 + 5; // Increment by 5-20%
+          if (prev >= 95) return 95; // Stop at 95% until done
+          return prev + Math.random() * 7 + 3; // Increment by 1-4% (slower)
         });
-      }, 500);
+      }, 800); // Slower interval
       
       const voiceId = await uploadVoiceAsset(uploadFile, profileId);
+      
+      // Clear interval before setting to 100%
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      
       setUploadProgress(100);
       await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause at 100%
       
