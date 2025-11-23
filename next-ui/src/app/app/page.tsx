@@ -148,14 +148,12 @@ export default function App() {
   const faceMeshRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smoothingRef = useRef({ x: 0, y: 0 });
-  const positionBufferRef = useRef<{ x: number; y: number }[]>([]); // Multi-frame buffer for averaging
   const lastValidPositionRef = useRef<{ x: number; y: number } | null>(null); // For outlier detection
   const lastElementDetectionRef = useRef<number>(0); // Throttle element detection
+  const buttonCacheRef = useRef<Array<{ element: HTMLElement; rect: DOMRect }>>([]);
   const hoveredElementRef = useRef<HTMLElement | null>(null);
   const dwellTimerRef = useRef<number | null>(null);
   const dwellRepeatRef = useRef<number | null>(null);
-  const candidateElementRef = useRef<HTMLElement | null>(null); // For hysteresis
-  const candidateTimerRef = useRef<number | null>(null);
   const currentOverlapRatioRef = useRef<number>(1.0); // Track cursor overlap percentage
   const lastClickTimeRef = useRef<number>(0); // Prevent rapid re-clicks
   const clickCooldownRef = useRef<number | null>(null); // Cooldown timer after click
@@ -183,8 +181,9 @@ export default function App() {
     y: 0,
     normalizedX: 0.5,
     normalizedY: 0.5,
+    coordX: 0,
+    coordY: 0,
   });
-  const [coordinates, setCoordinates] = useState({ x: 0, y: 0 });
   const [emotion, setEmotion] = useState<Emotion>('neutral');
   
   // Keep currentEmotionRef in sync with emotion state
@@ -799,22 +798,11 @@ export default function App() {
             lastValidPositionRef.current = { x: validX, y: validY };
           }
 
-          // MULTI-FRAME BUFFER: Add to circular buffer (keep last 8 frames for smoother tracking)
-          const BUFFER_SIZE = 8;
-          positionBufferRef.current.push({ x: validX, y: validY });
-          if (positionBufferRef.current.length > BUFFER_SIZE) {
-            positionBufferRef.current.shift();
-          }
-
-          // Calculate average position from buffer
-          const avgX = positionBufferRef.current.reduce((sum, pos) => sum + pos.x, 0) / positionBufferRef.current.length;
-          const avgY = positionBufferRef.current.reduce((sum, pos) => sum + pos.y, 0) / positionBufferRef.current.length;
-
-          // EXPONENTIAL MOVING AVERAGE on top of buffer average for extra smoothness
+          // EXPONENTIAL MOVING AVERAGE: Apply smoothing directly (simplified from 3-tier to 2-tier)
           smoothingRef.current.x =
-            smoothingRef.current.x + (avgX - smoothingRef.current.x) * SMOOTHING_FACTOR;
+            smoothingRef.current.x + (validX - smoothingRef.current.x) * SMOOTHING_FACTOR;
           smoothingRef.current.y =
-            smoothingRef.current.y + (avgY - smoothingRef.current.y) * SMOOTHING_FACTOR;
+            smoothingRef.current.y + (validY - smoothingRef.current.y) * SMOOTHING_FACTOR;
 
           ctx.beginPath();
           ctx.arc(smoothingRef.current.x, smoothingRef.current.y, 8, 0, 2 * Math.PI);
@@ -835,15 +823,14 @@ export default function App() {
           const viewportX = normalizedX * window.innerWidth;
           const viewportY = normalizedY * window.innerHeight;
 
+          // Batched state update - reduces re-renders
           setCursorPosition({
             x: viewportX,
             y: viewportY,
             normalizedX,
             normalizedY,
-          });
-          setCoordinates({
-            x: Math.round(normalizedX * 100),
-            y: Math.round(normalizedY * 100),
+            coordX: Math.round(normalizedX * 100),
+            coordY: Math.round(normalizedY * 100),
           });
           cursorRef.current?.classList.remove('hidden', 'opacity-0');
           cursorRef.current?.classList.add('opacity-100');
@@ -971,6 +958,35 @@ export default function App() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Cache button positions to avoid repeated DOM queries
+  const rebuildButtonCache = useCallback(() => {
+    const allDwellTargets = document.querySelectorAll('[data-dwell-target="true"]');
+    buttonCacheRef.current = Array.from(allDwellTargets)
+      .filter((el): el is HTMLElement =>
+        el instanceof HTMLElement &&
+        el.getAttribute('aria-disabled') !== 'true' &&
+        !(el as HTMLButtonElement).disabled
+      )
+      .map((element) => ({
+        element,
+        rect: element.getBoundingClientRect(),
+      }));
+  }, []);
+
+  // Rebuild cache on mount, window resize, and tracking state changes
+  useEffect(() => {
+    if (!mounted) return;
+
+    rebuildButtonCache();
+
+    const handleResize = () => {
+      rebuildButtonCache();
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [mounted, rebuildButtonCache, isTracking]);
 
   useEffect(() => {
     if (mounted && !activeProfileId && profiles.length > 0) {
@@ -1492,6 +1508,19 @@ export default function App() {
     if (!isTracking) {
       if (hoveredElementRef.current) {
         hoveredElementRef.current.dataset.dwellActive = 'false';
+        // Dispatch mouseleave and pointerleave events for proper tooltip/hover behavior
+        const mouseLeaveEvent = new MouseEvent('mouseleave', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        const pointerLeaveEvent = new PointerEvent('pointerleave', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        hoveredElementRef.current.dispatchEvent(mouseLeaveEvent);
+        hoveredElementRef.current.dispatchEvent(pointerLeaveEvent);
         hoveredElementRef.current = null;
       }
       if (dwellTimerRef.current) {
@@ -1502,11 +1531,6 @@ export default function App() {
         clearInterval(dwellRepeatRef.current);
         dwellRepeatRef.current = null;
       }
-      if (candidateTimerRef.current) {
-        clearTimeout(candidateTimerRef.current);
-        candidateTimerRef.current = null;
-        candidateElementRef.current = null;
-      }
       if (clickCooldownRef.current) {
         clearTimeout(clickCooldownRef.current);
         clickCooldownRef.current = null;
@@ -1514,51 +1538,26 @@ export default function App() {
       return;
     }
 
-    // THROTTLE: Only run element detection every 100ms to reduce DOM query overhead
+    // THROTTLE: Only run element detection every 120ms to reduce overhead
     const now = performance.now();
-    const ELEMENT_DETECTION_THROTTLE = 100; // ms
+    const ELEMENT_DETECTION_THROTTLE = 120; // ms (increased from 100ms for better performance)
     if (now - lastElementDetectionRef.current < ELEMENT_DETECTION_THROTTLE) {
       return; // Skip this update, too soon since last detection
     }
     lastElementDetectionRef.current = now;
 
-    // Get all eligible elements at cursor point, then select the one with center closest to cursor
-    const targetElements: Element[] = document.elementsFromPoint(
-      cursorPosition.x,
-      cursorPosition.y
-    );
-    
-    // Filter all eligible elements (not just find first)
-    let eligibleElements = targetElements.filter(
-      (el) =>
-        el instanceof HTMLElement &&
-        el.dataset.dwellTarget === 'true' &&
-        el.getAttribute('aria-disabled') !== 'true' &&
-        !(el as HTMLButtonElement).disabled
-    ) as HTMLElement[];
-    
-    // Fallback: if no elements found at exact point, check all dwell targets to see if cursor is within bounds
-    // This handles cases where cursor might be slightly off due to jitter
-    // Add a small buffer zone (5px) for more reliable detection
+    // Use cached button positions instead of DOM queries for better performance
     const BUFFER_ZONE = 5;
-    if (eligibleElements.length === 0) {
-      const allDwellTargets = document.querySelectorAll('[data-dwell-target="true"]');
-      for (const el of allDwellTargets) {
-        if (
-          el instanceof HTMLElement &&
-          el.getAttribute('aria-disabled') !== 'true' &&
-          !(el as HTMLButtonElement).disabled
-        ) {
-          const rect = el.getBoundingClientRect();
-          if (
-            cursorPosition.x >= rect.left - BUFFER_ZONE &&
-            cursorPosition.x <= rect.right + BUFFER_ZONE &&
-            cursorPosition.y >= rect.top - BUFFER_ZONE &&
-            cursorPosition.y <= rect.bottom + BUFFER_ZONE
-          ) {
-            eligibleElements.push(el);
-          }
-        }
+    const eligibleElements: HTMLElement[] = [];
+
+    for (const { element, rect } of buttonCacheRef.current) {
+      if (
+        cursorPosition.x >= rect.left - BUFFER_ZONE &&
+        cursorPosition.x <= rect.right + BUFFER_ZONE &&
+        cursorPosition.y >= rect.top - BUFFER_ZONE &&
+        cursorPosition.y <= rect.bottom + BUFFER_ZONE
+      ) {
+        eligibleElements.push(element);
       }
     }
     
@@ -1603,19 +1602,9 @@ export default function App() {
       currentOverlapRatioRef.current = bestOverlap;
     }
 
-    // HYSTERESIS: Don't switch immediately - wait to confirm cursor is stable on new element
-    // This prevents rapid switching due to jitter and makes selection SUPER reliable
-    const HYSTERESIS_MS = 100; // Wait 100ms before switching - balanced for responsiveness and stability
-    
+    // Check if element changed (simplified - no hysteresis delay)
     if (eligible === hoveredElementRef.current) {
-      // Same element - clear any candidate timer and update CSS animation if overlap changed
-      if (candidateTimerRef.current) {
-        clearTimeout(candidateTimerRef.current);
-        candidateTimerRef.current = null;
-        candidateElementRef.current = null;
-      }
-
-      // Update dwell duration dynamically as overlap changes
+      // Same element - update dwell duration dynamically if overlap changed
       if (eligible && bestOverlap > 0) {
         const newDwellDuration = calculateDwellTime(bestOverlap);
         eligible.style.setProperty('--dwell-duration', `${newDwellDuration}ms`);
@@ -1623,130 +1612,145 @@ export default function App() {
       return;
     }
 
-    // If we have a candidate that's different from current, wait to confirm
+    // Different element - switch immediately
     if (eligible && eligible !== hoveredElementRef.current) {
-      // If this is a new candidate, start/restart the hysteresis timer
-      if (candidateElementRef.current !== eligible) {
-        // Clear existing candidate timer
-        if (candidateTimerRef.current) {
-          clearTimeout(candidateTimerRef.current);
-        }
-        
-        // Set new candidate
-        candidateElementRef.current = eligible;
-        
-        // Wait before actually switching
-        candidateTimerRef.current = window.setTimeout(() => {
-          // Only switch if candidate is still valid
-          if (candidateElementRef.current === eligible && isTrackingRef.current) {
-            // Clear previous hover
-            if (hoveredElementRef.current) {
-              hoveredElementRef.current.dataset.dwellActive = 'false';
-            }
-            if (dwellTimerRef.current) {
-              clearTimeout(dwellTimerRef.current);
-              dwellTimerRef.current = null;
-            }
-            if (dwellRepeatRef.current) {
-              clearInterval(dwellRepeatRef.current);
-              dwellRepeatRef.current = null;
-            }
-            // Don't clear cooldown when switching elements - maintain it globally
-            // This prevents rapid clicks when moving between buttons
-            
-            // Set new hover
-            hoveredElementRef.current = eligible;
-            eligible.dataset.dwellActive = 'true';
-
-            // Calculate dynamic dwell time based on overlap
-            const dwellDuration = calculateDwellTime(currentOverlapRatioRef.current);
-
-            // Update CSS variable for animation
-            eligible.style.setProperty('--dwell-duration', `${dwellDuration}ms`);
-
-            dwellTimerRef.current = window.setTimeout(() => {
-              const now = performance.now();
-
-              // Check if we're in cooldown period (prevent rapid re-clicks)
-              const CLICK_COOLDOWN_MS = 400; // 400ms cooldown between clicks
-              if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
-                console.log('[Click] In cooldown, skipping click');
-                return;
-              }
-
-              // Execute the click
-              eligible.dataset.dwellSelected = 'true';
-              eligible.click();
-              lastClickTimeRef.current = now;
-
-              setTimeout(() => {
-                eligible.dataset.dwellSelected = 'false';
-              }, 250);
-
-              // Clear any existing cooldown timer
-              if (clickCooldownRef.current) {
-                clearTimeout(clickCooldownRef.current);
-              }
-
-              // Set cooldown period - during this time, new dwell attempts won't trigger
-              clickCooldownRef.current = window.setTimeout(() => {
-                clickCooldownRef.current = null;
-              }, CLICK_COOLDOWN_MS);
-
-              // After the first click, start auto-repeat ONLY if user stays on button for longer
-              // This prevents accidental double-clicks while allowing intentional repeats
-              const REPEAT_DELAY_MS = 1800; // Wait 1.8s before starting repeat (longer than cooldown)
-              const REPEAT_INTERVAL_MS = 1000; // Then repeat every 1s
-
-              if (dwellRepeatRef.current) {
-                clearInterval(dwellRepeatRef.current);
-              }
-
-              // Start repeat after delay (only if still hovering)
-              const repeatDelayTimer = window.setTimeout(() => {
-                if (hoveredElementRef.current === eligible && isTrackingRef.current) {
-                  dwellRepeatRef.current = window.setInterval(() => {
-                    if (
-                      hoveredElementRef.current === eligible &&
-                      isTrackingRef.current &&
-                      !clickCooldownRef.current // Don't repeat during cooldown
-                    ) {
-                      const repeatNow = performance.now();
-                      if (repeatNow - lastClickTimeRef.current >= CLICK_COOLDOWN_MS) {
-                        eligible.dataset.dwellSelected = 'true';
-                        eligible.click();
-                        lastClickTimeRef.current = repeatNow;
-                        window.setTimeout(() => {
-                          eligible.dataset.dwellSelected = 'false';
-                        }, 180);
-                      }
-                    } else {
-                      if (dwellRepeatRef.current) {
-                        clearInterval(dwellRepeatRef.current);
-                        dwellRepeatRef.current = null;
-                      }
-                    }
-                  }, REPEAT_INTERVAL_MS);
-                }
-              }, REPEAT_DELAY_MS);
-            }, dwellDuration);
-            
-            candidateElementRef.current = null;
-            candidateTimerRef.current = null;
-          }
-        }, HYSTERESIS_MS);
+      // Clear previous hover
+      if (hoveredElementRef.current) {
+        hoveredElementRef.current.dataset.dwellActive = 'false';
+        // Dispatch mouseleave and pointerleave events for proper tooltip/hover behavior
+        const mouseLeaveEvent = new MouseEvent('mouseleave', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        const pointerLeaveEvent = new PointerEvent('pointerleave', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        hoveredElementRef.current.dispatchEvent(mouseLeaveEvent);
+        hoveredElementRef.current.dispatchEvent(pointerLeaveEvent);
       }
-      return; // Wait for hysteresis timer
+      if (dwellTimerRef.current) {
+        clearTimeout(dwellTimerRef.current);
+        dwellTimerRef.current = null;
+      }
+      if (dwellRepeatRef.current) {
+        clearInterval(dwellRepeatRef.current);
+        dwellRepeatRef.current = null;
+      }
+
+      // Set new hover
+      hoveredElementRef.current = eligible;
+      eligible.dataset.dwellActive = 'true';
+
+      // Dispatch mouseenter and pointerenter events for proper tooltip/hover behavior
+      const mouseEnterEvent = new MouseEvent('mouseenter', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      const pointerEnterEvent = new PointerEvent('pointerenter', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        pointerType: 'mouse'
+      });
+      eligible.dispatchEvent(mouseEnterEvent);
+      eligible.dispatchEvent(pointerEnterEvent);
+
+      // Calculate dynamic dwell time based on overlap
+      const dwellDuration = calculateDwellTime(currentOverlapRatioRef.current);
+
+      // Update CSS variable for animation
+      eligible.style.setProperty('--dwell-duration', `${dwellDuration}ms`);
+
+      dwellTimerRef.current = window.setTimeout(() => {
+        const now = performance.now();
+
+        // Check if we're in cooldown period (prevent rapid re-clicks)
+        const CLICK_COOLDOWN_MS = 500; // 500ms cooldown between clicks
+        if (now - lastClickTimeRef.current < CLICK_COOLDOWN_MS) {
+          console.log('[Click] In cooldown, skipping click');
+          return;
+        }
+
+        // Execute the click
+        eligible.dataset.dwellSelected = 'true';
+        eligible.click();
+        lastClickTimeRef.current = now;
+
+        setTimeout(() => {
+          eligible.dataset.dwellSelected = 'false';
+        }, 250);
+
+        // Clear any existing cooldown timer
+        if (clickCooldownRef.current) {
+          clearTimeout(clickCooldownRef.current);
+        }
+
+        // Set cooldown period - during this time, new dwell attempts won't trigger
+        clickCooldownRef.current = window.setTimeout(() => {
+          clickCooldownRef.current = null;
+        }, CLICK_COOLDOWN_MS);
+
+        // After the first click, start auto-repeat ONLY if user stays on button for longer
+        // This prevents accidental double-clicks while allowing intentional repeats
+        const REPEAT_DELAY_MS = 1800; // Wait 1.8s before starting repeat (longer than cooldown)
+        const REPEAT_INTERVAL_MS = 1000; // Then repeat every 1s
+
+        if (dwellRepeatRef.current) {
+          clearInterval(dwellRepeatRef.current);
+        }
+
+        // Start repeat after delay (only if still hovering)
+        const repeatDelayTimer = window.setTimeout(() => {
+          if (hoveredElementRef.current === eligible && isTrackingRef.current) {
+            dwellRepeatRef.current = window.setInterval(() => {
+              if (
+                hoveredElementRef.current === eligible &&
+                isTrackingRef.current &&
+                !clickCooldownRef.current // Don't repeat during cooldown
+              ) {
+                const repeatNow = performance.now();
+                if (repeatNow - lastClickTimeRef.current >= CLICK_COOLDOWN_MS) {
+                  eligible.dataset.dwellSelected = 'true';
+                  eligible.click();
+                  lastClickTimeRef.current = repeatNow;
+                  window.setTimeout(() => {
+                    eligible.dataset.dwellSelected = 'false';
+                  }, 180);
+                }
+              } else {
+                if (dwellRepeatRef.current) {
+                  clearInterval(dwellRepeatRef.current);
+                  dwellRepeatRef.current = null;
+                }
+              }
+            }, REPEAT_INTERVAL_MS);
+          }
+        }, REPEAT_DELAY_MS);
+      }, dwellDuration);
+
+      return;
     }
 
     // No eligible element found - clear everything except cooldown
-    if (candidateTimerRef.current) {
-      clearTimeout(candidateTimerRef.current);
-      candidateTimerRef.current = null;
-      candidateElementRef.current = null;
-    }
     if (hoveredElementRef.current) {
       hoveredElementRef.current.dataset.dwellActive = 'false';
+      // Dispatch mouseleave and pointerleave events for proper tooltip/hover behavior
+      const mouseLeaveEvent = new MouseEvent('mouseleave', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      const pointerLeaveEvent = new PointerEvent('pointerleave', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      hoveredElementRef.current.dispatchEvent(mouseLeaveEvent);
+      hoveredElementRef.current.dispatchEvent(pointerLeaveEvent);
       hoveredElementRef.current = null;
     }
     if (dwellTimerRef.current) {

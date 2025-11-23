@@ -35,10 +35,10 @@ export default function LandingPage() {
             {/* Left: Text Content */}
             <div className="flex flex-col gap-6">
               <Heading size="9" className="font-bold leading-tight">
-                Helping the specially abled reclaim their voices and connect emotionally in conversations
+                Helping the specially abled reclaim their voices and connect emotionally
               </Heading>
               <Text size="5" color="gray" className="leading-relaxed">
-                Type hands-free, convey emotion and tone with your own voice, create custom voice profiles, or select from 200,000+ voice presets.
+                Type hands-free, convey emotion and tone with your own voice, create custom voice profiles, or select from curated voice presets.
                 </Text>
               <div className="pt-4">
                 <Link href="/app">

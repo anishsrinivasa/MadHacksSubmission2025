@@ -2,9 +2,11 @@
 
 import clsx from "clsx";
 import type { CSSProperties } from "react";
+import { Flex } from "@radix-ui/themes";
 import { DWELL_SELECT_MS } from "@/lib/config";
 import { Card } from "@/components/ui/Card";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 export type KeyboardKey = {
   label: string;
@@ -30,8 +32,13 @@ export function VirtualKeyboard({
   };
 
   return (
-    <Card 
-      header={<SectionHeading title="Virtual Keyboard" variant="compact" />}
+    <Card
+      header={
+        <Flex align="center" gap="2">
+          <SectionHeading title="Virtual Keyboard" variant="compact" />
+          <InfoTooltip content="Use your nose or physical keyboard to type. Hover over a key for a moment to select it. The SPEAK button reads your text aloud with emotion, and STOP halts playback." />
+        </Flex>
+      }
       padding="none"
       className="h-full flex flex-col min-h-0"
     >

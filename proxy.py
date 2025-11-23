@@ -370,12 +370,12 @@ def create_voice():
                 cover_image_buffers[format_name.lower()] = img_buffer
             
             cover_image_available = True
-            print("✅ Cover image created successfully (PNG and JPEG formats)")
+            print("Cover image created successfully (PNG and JPEG formats)")
         except ImportError:
-            print("⚠️ PIL/Pillow not available - install with: pip install Pillow")
-            print("⚠️ Will attempt without cover image first, then retry if needed")
+            print("PIL/Pillow not available - install with: pip install Pillow")
+            print("Will attempt without cover image first, then retry if needed")
         except Exception as e:
-            print(f"⚠️ Error creating cover image: {e}")
+            print(f"Error creating cover image: {e}")
         
         # Save audio to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
@@ -441,7 +441,7 @@ def create_voice():
                             'response': response.text[:500]
                         }), 500
                     
-                    print(f"✅ Voice model created successfully! Voice ID: {voice_id}")
+                    print(f"Voice model created successfully! Voice ID: {voice_id}")
                     
                     # Save voice ID to storage
                     save_user_voice_id(user_id, voice_id)
@@ -460,7 +460,7 @@ def create_voice():
                     }), 500
             elif response.status_code == 400 and "cover image" in response.text.lower():
                 # Special handling for cover image error - try with different field names
-                print("⚠️ Cover image required but not accepted. Trying different field names...")
+                print("Cover image required but not accepted. Trying different field names...")
                 
                 if not cover_image_available:
                     error_text = response.text[:1000]
@@ -514,7 +514,7 @@ def create_voice():
                             
                             if response_retry.status_code == 201:
                                 result = response_retry.json()
-                                print(f"  ✅ Success with field name '{field_name}'! Response: {result}")
+                                print(f"  Success with field name '{field_name}'! Response: {result}")
                                 voice_id = result.get('_id') or result.get('id') or result.get('voice_id') or result.get('reference_id')
                                 if voice_id:
                                     success = True
@@ -536,10 +536,10 @@ def create_voice():
                                     })
                             else:
                                 error_text_retry = response_retry.text[:200]
-                                print(f"  ❌ Failed with '{field_name}': {response_retry.status_code} - {error_text_retry}")
+                                print(f"  Failed with '{field_name}': {response_retry.status_code} - {error_text_retry}")
                                 
                     except Exception as e:
-                        print(f"  ❌ Exception with '{field_name}': {str(e)}")
+                        print(f"  Exception with '{field_name}': {str(e)}")
                         continue
                 
                 # Clean up retry temp file
@@ -557,7 +557,7 @@ def create_voice():
             else:
                 # Error response
                 error_text = response.text[:1000]
-                print(f"❌ API Error: {response.status_code} - {error_text}")
+                print(f"API Error: {response.status_code} - {error_text}")
                 
                 try:
                     error_json = response.json()
@@ -576,7 +576,7 @@ def create_voice():
                 os.unlink(temp_file_path)
             except:
                 pass
-            print(f"❌ Request Error: {str(e)}")
+            print(f"Request Error: {str(e)}")
             return jsonify({
                 'error': 'Failed to connect to Fish Audio API',
                 'details': str(e)
@@ -587,7 +587,7 @@ def create_voice():
                 os.unlink(temp_file_path)
             except:
                 pass
-            print(f"❌ Error: {str(e)}")
+            print(f"Error: {str(e)}")
             import traceback
             traceback.print_exc()
             return jsonify({
@@ -596,7 +596,7 @@ def create_voice():
             }), 500
             
     except Exception as e:
-        print(f"❌ Error creating voice: {e}")
+        print(f"Error creating voice: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({

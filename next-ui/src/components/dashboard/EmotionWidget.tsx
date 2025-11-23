@@ -33,7 +33,7 @@ export function EmotionWidget({
       {!isTracking ? (
         <Flex align="center" justify="center" className="h-full pt-2 pb-6 min-h-[200px]">
           <Text size="2" weight="medium" color="gray" className="opacity-60 text-center">
-            Camera off<br/>No emotion detected
+            Camera paused<br/>No emotion detected
           </Text>
         </Flex>
       ) : (

@@ -1,8 +1,9 @@
 "use client";
 
-import { Text } from "@radix-ui/themes";
+import { Text, Flex } from "@radix-ui/themes";
 import { RefObject } from "react";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 type CameraPanelProps = {
   videoRef: RefObject<HTMLVideoElement>;
@@ -20,7 +21,10 @@ export function CameraPanel({
 }: CameraPanelProps) {
   return (
     <div className="flex flex-col gap-3">
-      <SectionHeading title="Camera Feed" variant="compact" size="sm" />
+      <Flex align="center" gap="2">
+        <SectionHeading title="Camera Feed" variant="compact" size="sm" />
+        <InfoTooltip content="Use your webcam to track nose movements for hands-free typing and detect facial expressions for emotional speech." />
+      </Flex>
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-gray-900 border border-gray-200 shadow-inner">
         <video
           ref={videoRef}

@@ -19,7 +19,7 @@ export const EMOTION_VOICE_PARAMS: Record<
   { speed: number; volume: number }
 > = {
   happy: { speed: 1.3, volume: 0 },
-  sad: { speed: 0.6, volume: -4 },
+  sad: { speed: 0.6, volume: -3 },
   neutral: { speed: 1.0, volume: 0 },
   surprised: { speed: 1.5, volume: 2 },
   angry: { speed: 1.3, volume: 5 },
