@@ -794,8 +794,10 @@ export default function App() {
           ctx.strokeStyle = '#fff';
           ctx.stroke();
 
-          let normalizedX = 1 - noseTip.x;
-          let normalizedY = noseTip.y;
+          // Use the SMOOTHED nose position for cursor control to reduce jitter
+          // while still reacting quickly to movement.
+          let normalizedX = 1 - smoothingRef.current.x / canvas.width;
+          let normalizedY = smoothingRef.current.y / canvas.height;
           normalizedX = (normalizedX - 0.5) * NOSE_SENSITIVITY.x + 0.5;
           normalizedY = (normalizedY - 0.5) * NOSE_SENSITIVITY.y + 0.5;
           normalizedX = clamp(normalizedX, 0, 1);
@@ -1416,8 +1418,9 @@ export default function App() {
         setTimeout(() => {
           eligible.dataset.dwellSelected = 'false';
         }, 250);
-        // After the first selection, start auto-repeat while the nose stays on this key
-        const REPEAT_MS = 300;
+        // After the first selection, start auto-repeat while the nose stays on this key.
+        // Increase this delay so characters don't rapid-fire when the nose stays still.
+        const REPEAT_MS = 900;
         if (dwellRepeatRef.current) {
           clearInterval(dwellRepeatRef.current);
         }

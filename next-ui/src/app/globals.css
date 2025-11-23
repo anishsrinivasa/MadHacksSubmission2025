@@ -116,8 +116,9 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--madhacks-blue) 0%, var(--madhacks-blue-light) 100%);
+  height: 4px;
+  /* High-contrast white bar so dwell progress is clearly visible on all key colors */
+  background: rgba(255, 255, 255, 0.95);
   transform-origin: left center;
   transform: scaleX(0);
   opacity: 0;

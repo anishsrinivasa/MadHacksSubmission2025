@@ -35,11 +35,11 @@ export function VirtualKeyboard({
       padding="none"
       className="h-full flex flex-col min-h-0"
     >
-      <div className="flex-1 flex flex-col gap-2.5 w-full p-4 min-h-0 justify-between">
+      <div className="flex-1 flex flex-col gap-2.5 w-full p-4 min-h-0">
         {layout.map((row, rowIdx) => (
           <div
             key={`keyboard-row-${rowIdx}`}
-            className="flex w-full gap-2 flex-1 min-h-[60px] items-stretch"
+            className="flex w-full gap-2 flex-1 min-h-0 items-stretch"
           >
             {row.map((key) => {
               const isAutocomplete = key.value === "AUTOCOMPLETE";
@@ -55,7 +55,7 @@ export function VirtualKeyboard({
                   data-dwell-target="true"
                   disabled={disabled}
                   className={clsx(
-                    "dwell-key font-medium transition-all duration-200 ease-out flex items-center justify-center relative rounded-xl h-full min-h-[56px] px-4",
+                    "dwell-key font-medium transition-all duration-200 ease-out flex items-center justify-center relative rounded-xl h-full min-h-0 px-4",
                     
                     // Dwell active state (eye tracking hover) - using gradient
                     "data-[dwell-active=true]:bg-gradient-to-r data-[dwell-active=true]:from-[var(--madhacks-blue)] data-[dwell-active=true]:to-[var(--madhacks-blue-light)] data-[dwell-active=true]:text-white data-[dwell-active=true]:shadow-lg data-[dwell-active=true]:scale-105 data-[dwell-active=true]:z-10",

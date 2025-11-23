@@ -28,11 +28,16 @@ export const EMOTION_VOICE_PARAMS: Record<
 export const DWELL_SELECT_MS = 500;
 
 export const NOSE_SENSITIVITY = {
-  x: 4.0,
-  y: 5.0,
+  // Tuned to balance stability vs. required head movement.
+  // Lower values = less amplification of tiny detection noise (less “jumping”).
+  x: 3.6,
+  y: 4.2,
 };
 
-export const SMOOTHING_FACTOR = 0.3;
+// Smoothing for nose tracking:
+//  - Lower values = more smoothing (less jitter) but more lag
+//  - Higher values = more responsive but can look jumpy
+export const SMOOTHING_FACTOR = 0.38;
 
 export const EMOTION_MODEL_URLS = [
   'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
